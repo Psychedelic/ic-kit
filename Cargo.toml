@@ -1,0 +1,8 @@
+[package]
+name = "ic-dev-kit"
+version = "0.3.0"
+authors = ["Parsa Ghadimi <parsa@fleek.co>"]
+edition = "2018"
+
+[dependencies]
+ic-cdk = "0.3.0"
