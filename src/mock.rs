@@ -107,7 +107,8 @@ impl MockContext {
     where
         T: ArgumentEncoder,
     {
-        self.stable_store(data);
+        self.stable_store(data)
+            .expect("Encoding stable data failed.");
         self
     }
 
@@ -202,11 +203,6 @@ impl Context for MockContext {
     }
 
     #[inline]
-    fn get<T: 'static + Default>(&mut self) -> &T {
-        self.get_mut()
-    }
-
-    #[inline]
     fn get_mut<T: 'static + Default>(&mut self) -> &mut T {
         let type_id = std::any::TypeId::of::<T>();
         self.storage
@@ -223,11 +219,12 @@ impl Context for MockContext {
     }
 
     #[inline]
-    fn stable_store<T>(&mut self, data: T)
+    fn stable_store<T>(&mut self, data: T) -> Result<(), candid::Error>
     where
         T: ArgumentEncoder,
     {
-        self.stable = encode_args(data).expect("Failed to serialize data.");
+        self.stable = encode_args(data)?;
+        Ok(())
     }
 
     #[inline]
@@ -246,9 +243,9 @@ impl Context for MockContext {
     }
 
     fn call_raw(
-        &mut self,
+        &'static mut self,
         id: Principal,
-        method: &str,
+        method: &'static str,
         args_raw: Vec<u8>,
         cycles: u64,
     ) -> CallResponse<Vec<u8>> {
@@ -290,21 +287,6 @@ impl Context for MockContext {
         self.balance += ctx.cycles;
 
         Box::pin(async move { res })
-    }
-
-    #[inline]
-    fn call_with_payment<T: ArgumentEncoder, R: for<'a> ArgumentDecoder<'a>>(
-        &'static mut self,
-        id: Principal,
-        method: &'static str,
-        args: T,
-        cycles: u64,
-    ) -> CallResponse<R> {
-        let args_raw = encode_args(args).expect("Failed to encode arguments.");
-        Box::pin(async move {
-            let bytes = self.call_raw(id, method, args_raw, cycles).await?;
-            decode_args(&bytes).map_err(|err| panic!("{:?}", err))
-        })
     }
 
     #[inline]

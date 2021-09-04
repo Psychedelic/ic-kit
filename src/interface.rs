@@ -1,6 +1,7 @@
 use ic_cdk::api::call::CallResult;
 use ic_cdk::export::candid::utils::{ArgumentDecoder, ArgumentEncoder};
-use ic_cdk::export::Principal;
+use ic_cdk::export::candid::{decode_args, encode_args};
+use ic_cdk::export::{candid, Principal};
 use std::future::Future;
 use std::pin::Pin;
 
@@ -27,7 +28,10 @@ pub trait Context {
 
     /// Return the data associated with the given type. If the data is not present the default
     /// value of the type is returned.
-    fn get<T: 'static + Default>(&mut self) -> &T;
+    #[inline]
+    fn get<T: 'static + Default>(&mut self) -> &T {
+        self.get_mut()
+    }
 
     /// Return a mutable reference to the given data type, if the data is not present the default
     /// value of the type is constructed and stored. The changes made to the data during updates
@@ -38,7 +42,7 @@ pub trait Context {
     fn delete<T: 'static + Default>(&mut self) -> bool;
 
     /// Store the given data to the stable storage.
-    fn stable_store<T>(&mut self, data: T)
+    fn stable_store<T>(&mut self, data: T) -> Result<(), candid::Error>
     where
         T: ArgumentEncoder;
 
@@ -48,17 +52,17 @@ pub trait Context {
     where
         T: for<'de> ArgumentDecoder<'de>;
 
-    /// Perform a call
+    /// Perform a call.
     fn call_raw(
-        &mut self,
+        &'static mut self,
         id: Principal,
-        method: &str,
+        method: &'static str,
         args_raw: Vec<u8>,
         cycles: u64,
     ) -> CallResponse<Vec<u8>>;
 
     /// Perform the call and return the response.
-    #[inline]
+    #[inline(always)]
     fn call<T: ArgumentEncoder, R: for<'a> ArgumentDecoder<'a>>(
         &'static mut self,
         id: Principal,
@@ -68,14 +72,20 @@ pub trait Context {
         self.call_with_payment(id, method, args, 0)
     }
 
-    /// Perform the call and return the response.
+    #[inline(always)]
     fn call_with_payment<T: ArgumentEncoder, R: for<'a> ArgumentDecoder<'a>>(
         &'static mut self,
         id: Principal,
         method: &'static str,
         args: T,
         cycles: u64,
-    ) -> CallResponse<R>;
+    ) -> CallResponse<R> {
+        let args_raw = encode_args(args).expect("Failed to encode arguments.");
+        Box::pin(async move {
+            let bytes = self.call_raw(id, method, args_raw, cycles).await?;
+            decode_args(&bytes).map_err(|err| panic!("{:?}", err))
+        })
+    }
 
     /// Return the cycles that were sent back by the canister that was just called.
     /// This method should only be called right after an inter-canister call.

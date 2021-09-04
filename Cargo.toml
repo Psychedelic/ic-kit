@@ -6,5 +6,8 @@ edition = "2018"
 
 [dependencies]
 ic-cdk = "0.3.0"
+ic-cdk-macros = "0.3.0"
 serde = "1.0.130"
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
 async-std = { version="1.9.0", features = ["attributes"] }
