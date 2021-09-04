@@ -9,7 +9,7 @@ repository = "https://github.com/Psychedelic/ic-kit"
 homepage = "https://docs.rs/ic-kit"
 documentation = "https://docs.rs/ic-kit"
 categories = ["api-bindings", "data-structures", "testing"]
-keywords = ["internet-computer", "canister", "cdk", "fleek", "test"]
+keywords = ["internet-computer", "canister", "cdk", "fleek", "development-tools::testing"]
 include = ["src", "Cargo.toml", "README.md"]
 
 [dependencies]
