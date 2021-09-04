@@ -1,9 +1,16 @@
 [package]
 name = "ic-kit"
 version = "0.3.0"
+description = "Testable Canister Developer Kit for the Internet Computer."
 authors = ["Parsa Ghadimi <parsa@fleek.co>"]
 edition = "2018"
 license = "Apache-2.0"
+repository = "https://github.com/Psychedelic/ic-kit"
+homepage = "https://docs.rs/ic-kit"
+documentation = "https://docs.rs/ic-kit"
+categories = ["api-bindings", "data-structures", "testing"]
+keywords = ["internet-computer", "canister", "cdk", "fleek", "test"]
+include = ["src", "Cargo.toml", "README.md"]
 
 [dependencies]
 ic-cdk = "0.3.0"
