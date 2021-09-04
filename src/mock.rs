@@ -61,14 +61,42 @@ impl MockContext {
         }
     }
 
-    /// Set the ID of the current canister.
+    /// Set the ID of the canister.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use ic_kit::*;
+    ///
+    /// let id = Principal::from_text("ai7t5-aibaq-aaaaa-aaaaa-c").unwrap();
+    ///
+    /// MockContext::new()
+    ///     .with_id(id.clone())
+    ///     .inject();
+    ///
+    /// let ic = get_context();
+    /// assert_eq!(ic.id(), id);
+    /// ```
     #[inline]
     pub fn with_id(mut self, id: Principal) -> Self {
         self.id = id;
         self
     }
 
-    /// Set the balance of the current canister.
+    /// Set the balance of the canister.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use ic_kit::*;
+    ///
+    /// MockContext::new()
+    ///     .with_balance(1000)
+    ///     .inject();
+    ///
+    /// let ic = get_context();
+    /// assert_eq!(ic.balance(), 1000);
+    /// ```
     #[inline]
     pub fn with_balance(mut self, cycles: u64) -> Self {
         self.balance = cycles;
@@ -76,20 +104,65 @@ impl MockContext {
     }
 
     /// Set the caller for the current call.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use ic_kit::*;
+    ///
+    /// let alice = Principal::from_text("ai7t5-aibaq-aaaaa-aaaaa-c").unwrap();
+    ///
+    /// MockContext::new()
+    ///     .with_caller(alice.clone())
+    ///     .inject();
+    ///
+    /// let ic = get_context();
+    /// assert_eq!(ic.caller(), alice);
+    /// ```
     #[inline]
     pub fn with_caller(mut self, caller: Principal) -> Self {
         self.caller = caller;
         self
     }
 
-    /// Make the given amount of cycles available for the call.
+    /// Make the given amount of cycles available for the call. This amount of cycles will
+    /// be deduced if the call accepts them or will be refunded. If the canister accepts any
+    /// cycles the balance of the canister will be increased.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use ic_kit::*;
+    ///
+    /// MockContext::new()
+    ///     .with_msg_cycles(1000)
+    ///     .inject();
+    ///
+    /// let ic = get_context();
+    /// assert_eq!(ic.msg_cycles_available(), 1000);
+    /// ic.msg_cycles_accept(300);
+    /// assert_eq!(ic.msg_cycles_available(), 700);
+    /// ```
     #[inline]
     pub fn with_msg_cycles(mut self, cycles: u64) -> Self {
         self.cycles = cycles;
         self
     }
 
-    /// Store the given version of the data in storage.
+    /// Initialize the context with the given value inserted in the storage.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use ic_kit::*;
+    ///
+    /// MockContext::new()
+    ///     .with_data(String::from("Hello"))
+    ///     .inject();
+    ///
+    /// let ic = get_context();
+    /// assert_eq!(ic.get::<String>(), &"Hello".to_string());
+    /// ```
     #[inline]
     pub fn with_data<T: 'static>(mut self, data: T) -> Self {
         let type_id = std::any::TypeId::of::<T>();
@@ -97,7 +170,20 @@ impl MockContext {
         self
     }
 
-    /// Store the given data in the stable storage in this context.
+    /// Initialize the context with the given value inserted into the stable storage.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use ic_kit::*;
+    ///
+    /// MockContext::new()
+    ///     .with_stable(("Bella".to_string(), ))
+    ///     .inject();
+    ///
+    /// let ic = get_context();
+    /// assert_eq!(ic.stable_restore::<(String, )>(), Ok(("Bella".to_string(), )));
+    /// ```
     #[inline]
     pub fn with_stable<T: Serialize>(self, data: T) -> Self
     where
