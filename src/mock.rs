@@ -528,15 +528,143 @@ mod tests {
         }
     }
 
-    use crate::MockContext;
-    use crate::Principal;
+    /// Some mock principal ids.
+    mod users {
+        use crate::Principal;
 
-    #[async_std::test]
-    async fn test_with_id() {
+        pub fn bob() -> Principal {
+            Principal::from_text("ai7t5-aibaq-aaaaa-aaaaa-c").unwrap()
+        }
+
+        pub fn john() -> Principal {
+            Principal::from_text("hozae-racaq-aaaaa-aaaaa-c").unwrap()
+        }
+    }
+
+    use crate::Principal;
+    use crate::{Context, MockContext};
+
+    #[test]
+    fn test_with_id() {
         MockContext::new()
             .with_id(Principal::management_canister())
             .inject();
 
         assert_eq!(canister::canister_id(), Principal::management_canister());
+    }
+
+    #[test]
+    fn test_balance() {
+        let ctx = MockContext::new().with_balance(1000).inject();
+
+        assert_eq!(canister::balance(), 1000);
+
+        ctx.update_balance(2000);
+        assert_eq!(canister::balance(), 2000);
+    }
+
+    #[test]
+    fn test_caller() {
+        let ctx = MockContext::new().with_caller(users::john()).inject();
+
+        assert_eq!(canister::whoami(), users::john());
+
+        ctx.update_caller(users::bob());
+        assert_eq!(canister::whoami(), users::bob());
+    }
+
+    #[test]
+    fn test_msg_cycles() {
+        let ctx = MockContext::new().with_msg_cycles(1000).inject();
+
+        assert_eq!(canister::msg_cycles_available(), 1000);
+
+        ctx.update_msg_cycles(50);
+        assert_eq!(canister::msg_cycles_available(), 50);
+    }
+
+    #[test]
+    fn test_msg_cycles_accept() {
+        let ctx = MockContext::new()
+            .with_msg_cycles(1000)
+            .with_balance(240)
+            .inject();
+
+        assert_eq!(canister::msg_cycles_accept(100), 100);
+        assert_eq!(ctx.msg_cycles_available(), 900);
+        assert_eq!(ctx.balance(), 340);
+
+        ctx.update_msg_cycles(50);
+        assert_eq!(canister::msg_cycles_accept(100), 50);
+        assert_eq!(ctx.msg_cycles_available(), 0);
+        assert_eq!(ctx.balance(), 390);
+    }
+
+    #[test]
+    fn test_storage_simple() {
+        MockContext::new().inject();
+        assert_eq!(canister::increment(0), 1);
+        assert_eq!(canister::increment(0), 2);
+        assert_eq!(canister::increment(0), 3);
+        assert_eq!(canister::increment(1), 1);
+        assert_eq!(canister::decrement(0), 2);
+        assert_eq!(canister::decrement(2), -1);
+    }
+
+    #[test]
+    fn test_storage() {
+        let ctx = MockContext::new()
+            .with_data({
+                let mut map = canister::Counter::default();
+                map.insert(0, 12);
+                map.insert(1, 17);
+                map
+            })
+            .inject();
+        assert_eq!(canister::increment(0), 13);
+        assert_eq!(canister::decrement(1), 16);
+
+        ctx.store({
+            let mut map = canister::Counter::default();
+            map.insert(0, 12);
+            map.insert(1, 17);
+            map
+        });
+
+        assert_eq!(canister::increment(0), 13);
+        assert_eq!(canister::decrement(1), 16);
+
+        ctx.clear_storage();
+
+        assert_eq!(canister::increment(0), 1);
+        assert_eq!(canister::decrement(1), -1);
+    }
+
+    #[test]
+    fn stable_storage() {
+        let ctx = MockContext::new()
+            .with_data({
+                let mut map = canister::Counter::default();
+                map.insert(0, 2);
+                map.insert(1, 27);
+                map.insert(2, 5);
+                map.insert(3, 17);
+                map
+            })
+            .inject();
+
+        canister::pre_upgrade();
+        ctx.clear_storage();
+        canister::post_upgrade();
+
+        let counter = ctx.get::<canister::Counter>();
+        let data: Vec<(u64, i64)> = counter
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        assert_eq!(data, vec![(0, 2), (1, 27), (2, 5), (3, 17)]);
+
+        assert_eq!(canister::increment(0), 3);
+        assert_eq!(canister::decrement(1), 26);
     }
 }

@@ -16,9 +16,10 @@ pub fn inject(ctx: MockContext) {
 pub fn get_context() -> &'static mut MockContext {
     CONTEXT.with(|cell| {
         let borrow = cell.borrow();
-        let ctx = borrow
-            .as_ref()
-            .expect("Can not find the context for thread.");
+        let ctx = borrow.as_ref().expect(
+            "Can not find the context for thread.\
+            Are you using .inject() on the MockContext?",
+        );
         unsafe {
             let const_ptr = ctx as *const MockContext;
             let mut_ptr = const_ptr as *mut MockContext;
