@@ -460,6 +460,8 @@ impl Context for MockContext {
 mod tests {
     /// A simple canister implementation which helps the testing.
     mod canister {
+        use crate::interfaces::management::WithCanisterId;
+        use crate::interfaces::*;
         use crate::Context;
         use crate::{get_context, Principal};
         use std::collections::BTreeMap;
@@ -511,6 +513,44 @@ mod tests {
             let count = ic.get_mut::<Counter>().entry(key).or_insert(0);
             *count -= 1;
             *count
+        }
+
+        pub async fn withdraw(canister_id: Principal, amount: u64) -> Result<(), String> {
+            let ic = get_context();
+            let user_balance = ic.get_mut::<u64>();
+
+            if amount > *user_balance {
+                return Err(format!("Insufficient balance."));
+            }
+
+            *user_balance -= amount;
+
+            match management::DepositCycles::perform_with_payment(
+                ic,
+                Principal::management_canister(),
+                (WithCanisterId { canister_id },),
+                amount,
+            )
+            .await
+            {
+                Ok(()) => {
+                    *user_balance += ic.msg_cycles_refunded();
+                    Ok(())
+                }
+                Err((code, msg)) => {
+                    assert_eq!(amount, ic.msg_cycles_refunded());
+                    *user_balance += amount;
+                    Err(format!(
+                        "An error happened during the call: {}: {}",
+                        code as u8, msg
+                    ))
+                }
+            }
+        }
+
+        pub fn user_balance() -> u64 {
+            let ic = get_context();
+            *ic.get::<u64>()
         }
 
         pub fn pre_upgrade() {
@@ -666,5 +706,71 @@ mod tests {
 
         assert_eq!(canister::increment(0), 3);
         assert_eq!(canister::decrement(1), 26);
+    }
+
+    #[async_std::test]
+    async fn withdraw_accept() {
+        MockContext::new()
+            .with_accept_cycles_handler(200)
+            .with_data(1000u64)
+            .with_balance(2000)
+            .inject();
+
+        assert_eq!(canister::user_balance(), 1000);
+
+        canister::withdraw(users::bob(), 100).await.unwrap();
+
+        // The user balance needs to be decremented.
+        assert_eq!(canister::user_balance(), 900);
+        // The canister balance needs to be decremented.
+        assert_eq!(canister::balance(), 1900);
+    }
+
+    #[async_std::test]
+    async fn withdraw_accept_portion() {
+        MockContext::new()
+            .with_accept_cycles_handler(50)
+            .with_data(1000u64)
+            .with_balance(2000)
+            .inject();
+
+        assert_eq!(canister::user_balance(), 1000);
+
+        canister::withdraw(users::bob(), 100).await.unwrap();
+
+        // The user balance needs to be decremented.
+        assert_eq!(canister::user_balance(), 950);
+        // The canister balance needs to be decremented.
+        assert_eq!(canister::balance(), 1950);
+    }
+
+    #[async_std::test]
+    async fn withdraw_accept_zero() {
+        MockContext::new()
+            .with_accept_cycles_handler(0)
+            .with_data(1000u64)
+            .with_balance(2000)
+            .inject();
+
+        assert_eq!(canister::user_balance(), 1000);
+
+        canister::withdraw(users::bob(), 100).await.unwrap();
+
+        // The balance should not be decremented.
+        assert_eq!(canister::user_balance(), 1000);
+        assert_eq!(canister::balance(), 2000);
+    }
+
+    #[async_std::test]
+    async fn with_refund() {
+        MockContext::new()
+            .with_refund_cycles_handler(30)
+            .with_data(1000u64)
+            .with_balance(2000)
+            .inject();
+
+        canister::withdraw(users::bob(), 100).await.unwrap();
+        assert_eq!(canister::user_balance(), 930);
+        assert_eq!(canister::balance(), 1930);
     }
 }
