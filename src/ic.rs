@@ -51,13 +51,18 @@ impl Context for IcContext {
     }
 
     #[inline(always)]
-    fn cycles_available(&self) -> u64 {
+    fn msg_cycles_available(&self) -> u64 {
         ic_cdk::api::call::msg_cycles_available()
     }
 
     #[inline(always)]
-    fn cycles_accept(&mut self, amount: u64) -> u64 {
+    fn msg_cycles_accept(&mut self, amount: u64) -> u64 {
         ic_cdk::api::call::msg_cycles_accept(amount)
+    }
+
+    #[inline(always)]
+    fn msg_cycles_refunded(&self) -> u64 {
+        ic_cdk::api::call::msg_cycles_refunded()
     }
 
     #[inline(always)]
@@ -100,11 +105,6 @@ impl Context for IcContext {
         cycles: u64,
     ) -> CallResponse<Vec<u8>> {
         Box::pin(async move { ic_cdk::api::call::call_raw(id, method, args_raw, cycles).await })
-    }
-
-    #[inline(always)]
-    fn cycles_refunded(&self) -> u64 {
-        ic_cdk::api::call::msg_cycles_refunded()
     }
 
     #[inline(always)]

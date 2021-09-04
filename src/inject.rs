@@ -49,7 +49,7 @@ mod tests {
 
                 for j in 1..500 {
                     assert_eq!(ctx.balance(), id + j - 1);
-                    ctx.cycles_accept(1);
+                    ctx.msg_cycles_accept(1);
                     assert_eq!(ctx.balance(), id + j);
                     // Get it again.
                     let ctx2 = get_context();

@@ -21,10 +21,14 @@ pub trait Context {
     fn caller(&self) -> Principal;
 
     /// Return the number of available cycles that is sent by the caller.
-    fn cycles_available(&self) -> u64;
+    fn msg_cycles_available(&self) -> u64;
 
     /// Accept the given amount of cycles, returns the actual amount of accepted cycles.
-    fn cycles_accept(&mut self, amount: u64) -> u64;
+    fn msg_cycles_accept(&mut self, amount: u64) -> u64;
+
+    /// Return the cycles that were sent back by the canister that was just called.
+    /// This method should only be called right after an inter-canister call.
+    fn msg_cycles_refunded(&self) -> u64;
 
     /// Return the data associated with the given type. If the data is not present the default
     /// value of the type is returned.
@@ -86,10 +90,6 @@ pub trait Context {
             decode_args(&bytes).map_err(|err| panic!("{:?}", err))
         })
     }
-
-    /// Return the cycles that were sent back by the canister that was just called.
-    /// This method should only be called right after an inter-canister call.
-    fn cycles_refunded(&self) -> u64;
 
     /// Set the certified data of the canister, this method traps if data.len > 32.
     fn set_certified_data(&mut self, data: &[u8]);

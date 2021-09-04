@@ -79,13 +79,6 @@ impl MockContext {
         self
     }
 
-    /// Add the given canister with the given id to this context.
-    #[inline]
-    pub fn with_canister(mut self, id: Principal, canister: MockCanister) -> Self {
-        self.canisters.insert(id, canister);
-        self
-    }
-
     /// Make the given amount of cycles available for the call.
     #[inline]
     pub fn with_cycles(mut self, cycles: u64) -> Self {
@@ -109,6 +102,39 @@ impl MockContext {
     {
         self.stable_store(data)
             .expect("Encoding stable data failed.");
+        self
+    }
+
+    /// Set the certified data of the canister.
+    #[inline]
+    pub fn with_certified_data(mut self, data: Vec<u8>) -> Self {
+        assert!(data.len() < 32);
+        self.certified_data = Some(data);
+        self
+    }
+
+    /// Add the given canister with the given id to this context.
+    #[inline]
+    pub fn with_canister(mut self, id: Principal, canister: MockCanister) -> Self {
+        self.canisters.insert(id, canister);
+        self
+    }
+
+    /// Define a call handler that could be used for any canister/method that is not found in the
+    /// registered canisters.
+    #[inline]
+    pub fn with_default_handler<
+        T: for<'de> ArgumentDecoder<'de>,
+        R: ArgumentEncoder,
+        F: 'static + Fn(&mut MockContext, String, T) -> CallResult<R>,
+    >(
+        mut self,
+        handler: F,
+    ) -> Self {
+        self.default_handler = Some(Box::new(move |ctx, method, bytes| {
+            let args = decode_args(&bytes).expect("Failed to decode arguments.");
+            handler(ctx, method, args).map(|r| encode_args(r).expect("Failed to encode response."))
+        }));
         self
     }
 
@@ -184,12 +210,12 @@ impl Context for MockContext {
     }
 
     #[inline]
-    fn cycles_available(&self) -> u64 {
+    fn msg_cycles_available(&self) -> u64 {
         self.cycles
     }
 
     #[inline]
-    fn cycles_accept(&mut self, cycles: u64) -> u64 {
+    fn msg_cycles_accept(&mut self, cycles: u64) -> u64 {
         if cycles > self.cycles {
             let r = self.cycles;
             self.cycles = 0;
@@ -200,6 +226,11 @@ impl Context for MockContext {
             self.balance += cycles;
             cycles
         }
+    }
+
+    #[inline]
+    fn msg_cycles_refunded(&self) -> u64 {
+        self.cycles_refunded
     }
 
     #[inline]
@@ -287,11 +318,6 @@ impl Context for MockContext {
         self.balance += ctx.cycles;
 
         Box::pin(async move { res })
-    }
-
-    #[inline]
-    fn cycles_refunded(&self) -> u64 {
-        self.cycles_refunded
     }
 
     #[inline]
