@@ -304,7 +304,7 @@ impl Context for MockContext {
 
         self.is_reply_callback_mode = true;
 
-        let res = if let Some(cb) = maybe_cb {
+        let res: CallResult<Vec<u8>> = if let Some(cb) = maybe_cb {
             cb(&mut ctx, args_raw)
         } else if let Some(cb) = &self.default_handler {
             cb(&mut ctx, method.to_string(), args_raw)
@@ -313,9 +313,15 @@ impl Context for MockContext {
             panic!("Method {} not found on canister \"{}\"", method, id);
         };
 
-        // Take the cycles that are not consumed as refunded.
-        self.cycles_refunded = ctx.cycles;
-        self.balance += ctx.cycles;
+        if res.is_err() {
+            // Refund all of the cycles that were sent.
+            self.cycles_refunded = cycles;
+        } else {
+            // Take the cycles that are not consumed as refunded.
+            self.cycles_refunded = ctx.cycles;
+        }
+
+        self.balance += self.cycles_refunded;
 
         Box::pin(async move { res })
     }

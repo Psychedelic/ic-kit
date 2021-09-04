@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 
 static mut CONTEXT: Option<IcContext> = None;
 
+/// A singleton context that is used in the actual IC environment.
 pub struct IcContext {
     /// The storage for this context.
     storage: BTreeMap<TypeId, Box<dyn Any>>,
