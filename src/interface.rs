@@ -8,6 +8,12 @@ use std::pin::Pin;
 pub type CallResponse<T> = Pin<Box<dyn Future<Output = CallResult<T>>>>;
 
 pub trait Context {
+    /// Trap the code.
+    fn trap(&self, message: &str) -> !;
+
+    /// Print a message.
+    fn print<S: std::convert::AsRef<str>>(&self, s: S);
+
     /// ID of the current canister.
     fn id(&self) -> Principal;
 

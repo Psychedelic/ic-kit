@@ -42,7 +42,7 @@ mod tests {
                 let id = i * 10000;
                 let ctx = MockContext::new()
                     .with_balance(id)
-                    .with_cycles(5000)
+                    .with_msg_cycles(5000)
                     .inject();
 
                 assert_eq!(ctx.balance(), id);

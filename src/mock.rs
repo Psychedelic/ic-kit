@@ -19,6 +19,8 @@ pub struct MockContext {
     caller: Principal,
     /// Determines if a call was made or not.
     is_reply_callback_mode: bool,
+    /// Whatever the canister called trap or not.
+    trapped: bool,
     /// Available cycles sent by the caller.
     cycles: u64,
     /// Cycles refunded by the previous call.
@@ -48,6 +50,7 @@ impl MockContext {
             balance: 100_000_000_000_000,
             caller: Principal::anonymous(),
             is_reply_callback_mode: false,
+            trapped: false,
             cycles: 0,
             cycles_refunded: 0,
             storage: BTreeMap::new(),
@@ -81,7 +84,7 @@ impl MockContext {
 
     /// Make the given amount of cycles available for the call.
     #[inline]
-    pub fn with_cycles(mut self, cycles: u64) -> Self {
+    pub fn with_msg_cycles(mut self, cycles: u64) -> Self {
         self.cycles = cycles;
         self
     }
@@ -157,6 +160,40 @@ impl MockContext {
     }
 }
 
+impl MockContext {
+    /// Reset the state after a call.
+    #[inline]
+    pub fn reset(&mut self) {
+        self.is_reply_callback_mode = false;
+        self.trapped = false;
+    }
+
+    /// Update the balance of the canister.
+    #[inline]
+    pub fn update_balance(&mut self, cycles: u64) {
+        self.balance = cycles;
+    }
+
+    /// Update the cycles of the next message.
+    #[inline]
+    pub fn update_msg_cycles(&mut self, cycles: u64) {
+        self.cycles = cycles;
+    }
+
+    /// Update the caller for the next message.
+    #[inline]
+    pub fn update_caller(&mut self, caller: Principal) {
+        self.caller = caller;
+    }
+
+    /// Insert the given version of the data to this context.
+    #[inline]
+    pub fn insert<T: 'static + Default>(&mut self, data: T) {
+        let type_id = TypeId::of::<T>();
+        self.storage.insert(type_id, Box::new(data));
+    }
+}
+
 impl MockCanister {
     /// Create a new mock canister.
     #[inline]
@@ -189,6 +226,17 @@ impl MockCanister {
 }
 
 impl Context for MockContext {
+    #[inline]
+    fn trap(&self, message: &str) -> ! {
+        self.as_mut().trapped = true;
+        panic!("Canister {} trapped with message: {}", self.id, message);
+    }
+
+    #[inline]
+    fn print<S: AsRef<str>>(&self, s: S) {
+        println!("{} : {}", self.id, s.as_ref())
+    }
+
     #[inline]
     fn id(&self) -> Principal {
         self.id.clone()
@@ -313,7 +361,7 @@ impl Context for MockContext {
         // Create the context for the new call.
         let mut ctx = MockContext::new()
             .with_id(id.clone())
-            .with_cycles(cycles)
+            .with_msg_cycles(cycles)
             // Set the caller to the current canister.
             .with_caller(self.id.clone());
 

@@ -33,6 +33,16 @@ impl IcContext {
 
 impl Context for IcContext {
     #[inline(always)]
+    fn trap(&self, message: &str) -> ! {
+        ic_cdk::api::trap(message);
+    }
+
+    #[inline(always)]
+    fn print<S: std::convert::AsRef<str>>(&self, s: S) {
+        ic_cdk::api::print(s)
+    }
+
+    #[inline(always)]
     fn id(&self) -> Principal {
         ic_cdk::id()
     }
