@@ -11,7 +11,7 @@ static mut CONTEXT: Option<IcContext> = None;
 /// A singleton context that is used in the actual IC environment.
 pub struct IcContext {
     /// The storage for this context.
-    storage: RefCell<BTreeMap<TypeId, Box<dyn Any>>>,
+    storage: BTreeMap<TypeId, Box<dyn Any>>,
 }
 
 impl IcContext {
@@ -23,10 +23,19 @@ impl IcContext {
                 ctx
             } else {
                 CONTEXT = Some(IcContext {
-                    storage: RefCell::new(BTreeMap::new()),
+                    storage: BTreeMap::new(),
                 });
                 IcContext::context()
             }
+        }
+    }
+
+    #[inline(always)]
+    fn as_mut(&self) -> &mut Self {
+        unsafe {
+            let const_ptr = self as *const Self;
+            let mut_ptr = const_ptr as *mut Self;
+            &mut *mut_ptr
         }
     }
 }
@@ -78,10 +87,16 @@ impl Context for IcContext {
     }
 
     #[inline(always)]
+    fn store<T: 'static + Default>(&self, data: T) {
+        let type_id = TypeId::of::<T>();
+        self.as_mut().storage.insert(type_id, Box::new(data));
+    }
+
+    #[inline(always)]
     fn get_mut<T: 'static + Default>(&self) -> &mut T {
         let type_id = std::any::TypeId::of::<T>();
-        self.storage
-            .borrow_mut()
+        self.as_mut()
+            .storage
             .entry(type_id)
             .or_insert_with(|| Box::new(T::default()))
             .downcast_mut()
@@ -91,7 +106,7 @@ impl Context for IcContext {
     #[inline(always)]
     fn delete<T: 'static + Default>(&self) -> bool {
         let type_id = std::any::TypeId::of::<T>();
-        self.storage.borrow_mut().remove(&type_id).is_some()
+        self.as_mut().storage.remove(&type_id).is_some()
     }
 
     #[inline(always)]
@@ -110,6 +125,7 @@ impl Context for IcContext {
         ic_cdk::storage::stable_restore()
     }
 
+    #[inline(always)]
     fn call_raw(
         &'static self,
         id: Principal,

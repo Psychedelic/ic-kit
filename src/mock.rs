@@ -141,6 +141,22 @@ impl MockContext {
         self
     }
 
+    /// Creates a mock context with a default handler that accepts the given amount of cycles
+    /// on every request.
+    #[inline]
+    pub fn with_accept_cycles_handler(mut self, cycles: u64) -> Self {
+        self.use_accept_cycles_handler(cycles);
+        self
+    }
+
+    /// Creates a mock context with a default handler that refunds the given amount of cycles
+    /// on every request.
+    #[inline]
+    pub fn with_refund_cycles_handler(mut self, cycles: u64) -> Self {
+        self.use_refund_cycles_handler(cycles);
+        self
+    }
+
     /// Use this context as the default context for this thread.
     #[inline]
     pub fn inject(self) -> &'static mut Self {
@@ -163,9 +179,15 @@ impl MockContext {
 impl MockContext {
     /// Reset the state after a call.
     #[inline]
-    pub fn reset(&mut self) {
+    pub fn call_state_reset(&mut self) {
         self.is_reply_callback_mode = false;
         self.trapped = false;
+    }
+
+    /// Clear the storage.
+    #[inline]
+    pub fn clear_storage(&mut self) {
+        self.storage.clear()
     }
 
     /// Update the balance of the canister.
@@ -186,11 +208,31 @@ impl MockContext {
         self.caller = caller;
     }
 
-    /// Insert the given version of the data to this context.
+    /// Set the default handler to be a method that accepts the given amount of cycles on every
+    /// request.
     #[inline]
-    pub fn insert<T: 'static + Default>(&mut self, data: T) {
-        let type_id = TypeId::of::<T>();
-        self.storage.insert(type_id, Box::new(data));
+    pub fn use_accept_cycles_handler(&mut self, cycles: u64) {
+        self.default_handler = Some(Box::new(move |ctx, _, _| {
+            ctx.msg_cycles_accept(cycles);
+            Ok(encode_args(()).unwrap())
+        }));
+    }
+
+    /// Set the default handler to be a method that refunds the given amount of cycles on every
+    /// request.
+    #[inline]
+    pub fn use_refund_cycles_handler(&mut self, cycles: u64) {
+        self.default_handler = Some(Box::new(move |ctx, _, _| {
+            let available = ctx.msg_cycles_available();
+            if available < cycles {
+                panic!(
+                    "Can not refund {} cycles when there is only {} cycles available.",
+                    cycles, available
+                );
+            }
+            ctx.msg_cycles_accept(available - cycles);
+            Ok(encode_args(()).unwrap())
+        }));
     }
 }
 
@@ -291,6 +333,12 @@ impl Context for MockContext {
     #[inline]
     fn msg_cycles_refunded(&self) -> u64 {
         self.cycles_refunded
+    }
+
+    #[inline]
+    fn store<T: 'static + Default>(&self, data: T) {
+        let type_id = TypeId::of::<T>();
+        self.as_mut().storage.insert(type_id, Box::new(data));
     }
 
     #[inline]
@@ -405,5 +453,90 @@ impl Context for MockContext {
             Some(v) => Some(v.clone()),
             None => None,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    /// A simple canister implementation which helps the testing.
+    mod canister {
+        use crate::Context;
+        use crate::{get_context, Principal};
+        use std::collections::BTreeMap;
+
+        /// An update method that returns the principal id of the caller.
+        pub fn whoami() -> Principal {
+            let ic = get_context();
+            ic.caller()
+        }
+
+        /// An update method that returns the principal id of the canister.
+        pub fn canister_id() -> Principal {
+            let ic = get_context();
+            ic.id()
+        }
+
+        /// An update method that returns the balance of the canister.
+        pub fn balance() -> u64 {
+            let ic = get_context();
+            ic.balance()
+        }
+
+        /// An update method that returns the number of cycles provided by the user in the call.
+        pub fn msg_cycles_available() -> u64 {
+            let ic = get_context();
+            ic.msg_cycles_available()
+        }
+
+        /// An update method that accepts the given number of cycles from the caller, the number of
+        /// accepted cycles is returned.
+        pub fn msg_cycles_accept(cycles: u64) -> u64 {
+            let ic = get_context();
+            ic.msg_cycles_accept(cycles)
+        }
+
+        pub type Counter = BTreeMap<u64, i64>;
+
+        /// An update method that increments one to the given key, the new value is returned.
+        pub fn increment(key: u64) -> i64 {
+            let ic = get_context();
+            let count = ic.get_mut::<Counter>().entry(key).or_insert(0);
+            *count += 1;
+            *count
+        }
+
+        /// An update method that decrement one from the given key. The new value is returned.
+        pub fn decrement(key: u64) -> i64 {
+            let ic = get_context();
+            let count = ic.get_mut::<Counter>().entry(key).or_insert(0);
+            *count -= 1;
+            *count
+        }
+
+        pub fn pre_upgrade() {
+            let ic = get_context();
+            let map = ic.get::<Counter>();
+            ic.stable_store((map,))
+                .expect("Failed to write to stable storage");
+        }
+
+        pub fn post_upgrade() {
+            let ic = get_context();
+            if let Ok((map,)) = ic.stable_restore() {
+                ic.store::<Counter>(map);
+            }
+        }
+    }
+
+    use crate::MockContext;
+    use crate::Principal;
+
+    #[async_std::test]
+    async fn test_with_id() {
+        MockContext::new()
+            .with_id(Principal::management_canister())
+            .inject();
+
+        assert_eq!(canister::canister_id(), Principal::management_canister());
     }
 }

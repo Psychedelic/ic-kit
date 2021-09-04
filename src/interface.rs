@@ -36,6 +36,9 @@ pub trait Context {
     /// This method should only be called right after an inter-canister call.
     fn msg_cycles_refunded(&self) -> u64;
 
+    /// Store the given data to the storage.
+    fn store<T: 'static + Default>(&self, data: T);
+
     /// Return the data associated with the given type. If the data is not present the default
     /// value of the type is returned.
     #[inline]
