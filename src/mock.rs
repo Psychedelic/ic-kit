@@ -96,7 +96,7 @@ impl MockContext {
 
     /// Store the given data in the stable storage in this context.
     #[inline]
-    pub fn with_stable<T: Serialize>(mut self, data: T) -> Self
+    pub fn with_stable<T: Serialize>(self, data: T) -> Self
     where
         T: ArgumentEncoder,
     {
@@ -143,6 +143,17 @@ impl MockContext {
     pub fn inject(self) -> &'static mut Self {
         inject(self);
         get_context()
+    }
+
+    /// This is how we do interior mutability for MockContext. Since the context is only accessible
+    /// by only one thread, it is safe to do it here.
+    #[inline]
+    fn as_mut(&self) -> &mut Self {
+        unsafe {
+            let const_ptr = self as *const Self;
+            let mut_ptr = const_ptr as *mut Self;
+            &mut *mut_ptr
+        }
     }
 }
 
@@ -215,15 +226,16 @@ impl Context for MockContext {
     }
 
     #[inline]
-    fn msg_cycles_accept(&mut self, cycles: u64) -> u64 {
-        if cycles > self.cycles {
-            let r = self.cycles;
-            self.cycles = 0;
-            self.balance += r;
+    fn msg_cycles_accept(&self, cycles: u64) -> u64 {
+        let mut_ref = self.as_mut();
+        if cycles > mut_ref.cycles {
+            let r = mut_ref.cycles;
+            mut_ref.cycles = 0;
+            mut_ref.balance += r;
             r
         } else {
-            self.cycles -= cycles;
-            self.balance += cycles;
+            mut_ref.cycles -= cycles;
+            mut_ref.balance += cycles;
             cycles
         }
     }
@@ -234,9 +246,10 @@ impl Context for MockContext {
     }
 
     #[inline]
-    fn get_mut<T: 'static + Default>(&mut self) -> &mut T {
+    fn get_mut<T: 'static + Default>(&self) -> &mut T {
         let type_id = std::any::TypeId::of::<T>();
-        self.storage
+        self.as_mut()
+            .storage
             .entry(type_id)
             .or_insert_with(|| Box::new(T::default()))
             .downcast_mut()
@@ -244,17 +257,17 @@ impl Context for MockContext {
     }
 
     #[inline]
-    fn delete<T: 'static + Default>(&mut self) -> bool {
+    fn delete<T: 'static + Default>(&self) -> bool {
         let type_id = std::any::TypeId::of::<T>();
-        self.storage.remove(&type_id).is_some()
+        self.as_mut().storage.remove(&type_id).is_some()
     }
 
     #[inline]
-    fn stable_store<T>(&mut self, data: T) -> Result<(), candid::Error>
+    fn stable_store<T>(&self, data: T) -> Result<(), candid::Error>
     where
         T: ArgumentEncoder,
     {
-        self.stable = encode_args(data)?;
+        self.as_mut().stable = encode_args(data)?;
         Ok(())
     }
 
@@ -274,7 +287,7 @@ impl Context for MockContext {
     }
 
     fn call_raw(
-        &'static mut self,
+        &'static self,
         id: Principal,
         method: &'static str,
         args_raw: Vec<u8>,
@@ -287,7 +300,9 @@ impl Context for MockContext {
             );
         }
 
-        self.balance -= cycles;
+        let mut_ref = self.as_mut();
+
+        mut_ref.balance -= cycles;
 
         let maybe_cb = self
             .canisters
@@ -302,37 +317,38 @@ impl Context for MockContext {
             // Set the caller to the current canister.
             .with_caller(self.id.clone());
 
-        self.is_reply_callback_mode = true;
+        mut_ref.is_reply_callback_mode = true;
 
         let res: CallResult<Vec<u8>> = if let Some(cb) = maybe_cb {
             cb(&mut ctx, args_raw)
         } else if let Some(cb) = &self.default_handler {
             cb(&mut ctx, method.to_string(), args_raw)
         } else {
-            self.balance += cycles;
+            mut_ref.balance += cycles;
             panic!("Method {} not found on canister \"{}\"", method, id);
         };
 
-        if res.is_err() {
+        let refund = if res.is_err() {
             // Refund all of the cycles that were sent.
-            self.cycles_refunded = cycles;
+            cycles
         } else {
             // Take the cycles that are not consumed as refunded.
-            self.cycles_refunded = ctx.cycles;
-        }
+            ctx.cycles
+        };
 
-        self.balance += self.cycles_refunded;
+        mut_ref.cycles_refunded = refund;
+        mut_ref.balance += refund;
 
         Box::pin(async move { res })
     }
 
     #[inline]
-    fn set_certified_data(&mut self, data: &[u8]) {
+    fn set_certified_data(&self, data: &[u8]) {
         if data.len() > 32 {
             panic!("Data certificate has more than 32 bytes.");
         }
 
-        self.certified_data = Some(data.to_vec())
+        self.as_mut().certified_data = Some(data.to_vec());
     }
 
     #[inline]

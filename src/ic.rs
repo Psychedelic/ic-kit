@@ -3,6 +3,7 @@ use ic_cdk;
 use ic_cdk::export::candid::utils::{ArgumentDecoder, ArgumentEncoder};
 use ic_cdk::export::{candid, Principal};
 use std::any::{Any, TypeId};
+use std::cell::RefCell;
 use std::collections::BTreeMap;
 
 static mut CONTEXT: Option<IcContext> = None;
@@ -10,7 +11,7 @@ static mut CONTEXT: Option<IcContext> = None;
 /// A singleton context that is used in the actual IC environment.
 pub struct IcContext {
     /// The storage for this context.
-    storage: BTreeMap<TypeId, Box<dyn Any>>,
+    storage: RefCell<BTreeMap<TypeId, Box<dyn Any>>>,
 }
 
 impl IcContext {
@@ -22,7 +23,7 @@ impl IcContext {
                 ctx
             } else {
                 CONTEXT = Some(IcContext {
-                    storage: BTreeMap::new(),
+                    storage: RefCell::new(BTreeMap::new()),
                 });
                 IcContext::context()
             }
@@ -57,7 +58,7 @@ impl Context for IcContext {
     }
 
     #[inline(always)]
-    fn msg_cycles_accept(&mut self, amount: u64) -> u64 {
+    fn msg_cycles_accept(&self, amount: u64) -> u64 {
         ic_cdk::api::call::msg_cycles_accept(amount)
     }
 
@@ -67,9 +68,10 @@ impl Context for IcContext {
     }
 
     #[inline(always)]
-    fn get_mut<T: 'static + Default>(&mut self) -> &mut T {
+    fn get_mut<T: 'static + Default>(&self) -> &mut T {
         let type_id = std::any::TypeId::of::<T>();
         self.storage
+            .borrow_mut()
             .entry(type_id)
             .or_insert_with(|| Box::new(T::default()))
             .downcast_mut()
@@ -77,13 +79,13 @@ impl Context for IcContext {
     }
 
     #[inline(always)]
-    fn delete<T: 'static + Default>(&mut self) -> bool {
+    fn delete<T: 'static + Default>(&self) -> bool {
         let type_id = std::any::TypeId::of::<T>();
-        self.storage.remove(&type_id).is_some()
+        self.storage.borrow_mut().remove(&type_id).is_some()
     }
 
     #[inline(always)]
-    fn stable_store<T>(&mut self, data: T) -> Result<(), candid::Error>
+    fn stable_store<T>(&self, data: T) -> Result<(), candid::Error>
     where
         T: ArgumentEncoder,
     {
@@ -99,7 +101,7 @@ impl Context for IcContext {
     }
 
     fn call_raw(
-        &'static mut self,
+        &'static self,
         id: Principal,
         method: &'static str,
         args_raw: Vec<u8>,
@@ -109,7 +111,7 @@ impl Context for IcContext {
     }
 
     #[inline(always)]
-    fn set_certified_data(&mut self, data: &[u8]) {
+    fn set_certified_data(&self, data: &[u8]) {
         ic_cdk::api::set_certified_data(data);
     }
 

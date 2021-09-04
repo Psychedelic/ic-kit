@@ -11,7 +11,7 @@ pub trait Method {
 
     #[inline]
     fn perform<T: Context>(
-        ctx: &'static mut T,
+        ctx: &'static T,
         id: Principal,
         args: Self::Arguments,
     ) -> CallResponse<Self::Response> {
@@ -20,7 +20,7 @@ pub trait Method {
 
     #[inline]
     fn perform_with_payment<T: Context>(
-        ctx: &'static mut T,
+        ctx: &'static T,
         id: Principal,
         args: Self::Arguments,
         cycles: u64,

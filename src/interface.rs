@@ -24,7 +24,7 @@ pub trait Context {
     fn msg_cycles_available(&self) -> u64;
 
     /// Accept the given amount of cycles, returns the actual amount of accepted cycles.
-    fn msg_cycles_accept(&mut self, amount: u64) -> u64;
+    fn msg_cycles_accept(&self, amount: u64) -> u64;
 
     /// Return the cycles that were sent back by the canister that was just called.
     /// This method should only be called right after an inter-canister call.
@@ -33,20 +33,20 @@ pub trait Context {
     /// Return the data associated with the given type. If the data is not present the default
     /// value of the type is returned.
     #[inline]
-    fn get<T: 'static + Default>(&mut self) -> &T {
+    fn get<T: 'static + Default>(&self) -> &T {
         self.get_mut()
     }
 
     /// Return a mutable reference to the given data type, if the data is not present the default
     /// value of the type is constructed and stored. The changes made to the data during updates
     /// is preserved.
-    fn get_mut<T: 'static + Default>(&mut self) -> &mut T;
+    fn get_mut<T: 'static + Default>(&self) -> &mut T;
 
     /// Remove the data associated with the given data type.
-    fn delete<T: 'static + Default>(&mut self) -> bool;
+    fn delete<T: 'static + Default>(&self) -> bool;
 
     /// Store the given data to the stable storage.
-    fn stable_store<T>(&mut self, data: T) -> Result<(), candid::Error>
+    fn stable_store<T>(&self, data: T) -> Result<(), candid::Error>
     where
         T: ArgumentEncoder;
 
@@ -58,7 +58,7 @@ pub trait Context {
 
     /// Perform a call.
     fn call_raw(
-        &'static mut self,
+        &'static self,
         id: Principal,
         method: &'static str,
         args_raw: Vec<u8>,
@@ -68,7 +68,7 @@ pub trait Context {
     /// Perform the call and return the response.
     #[inline(always)]
     fn call<T: ArgumentEncoder, R: for<'a> ArgumentDecoder<'a>>(
-        &'static mut self,
+        &'static self,
         id: Principal,
         method: &'static str,
         args: T,
@@ -78,7 +78,7 @@ pub trait Context {
 
     #[inline(always)]
     fn call_with_payment<T: ArgumentEncoder, R: for<'a> ArgumentDecoder<'a>>(
-        &'static mut self,
+        &'static self,
         id: Principal,
         method: &'static str,
         args: T,
@@ -92,7 +92,7 @@ pub trait Context {
     }
 
     /// Set the certified data of the canister, this method traps if data.len > 32.
-    fn set_certified_data(&mut self, data: &[u8]);
+    fn set_certified_data(&self, data: &[u8]);
 
     /// Returns the data certificate authenticating certified_data set by this canister.
     fn data_certificate(&self) -> Option<Vec<u8>>;

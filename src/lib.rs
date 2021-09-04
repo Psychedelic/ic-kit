@@ -9,7 +9,6 @@ pub use ic::*;
 pub use interface::*;
 pub use mock::*;
 
-use crate::interfaces::management::WithCanisterId;
 pub use ic_cdk::export::candid;
 pub use ic_cdk::export::Principal;
 
@@ -37,6 +36,7 @@ pub fn get_context() -> &'static mut impl Context {
 #[cfg(test)]
 mod demo {
     use super::*;
+    use crate::interfaces::management::WithCanisterId;
     use crate::interfaces::{management, Method};
 
     async fn deposit_to_canister(cycles: u64) {
@@ -65,8 +65,7 @@ mod demo {
             }
         };
 
-        let ic = get_context();
-        *ic.get_mut::<u64>() += ic.msg_cycles_refunded();
+        *balance += ic.msg_cycles_refunded();
     }
 
     #[macros::test]
