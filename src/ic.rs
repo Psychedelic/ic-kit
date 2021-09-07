@@ -1,10 +1,12 @@
-use crate::{CallResponse, Context};
-use ic_cdk;
-use ic_cdk::export::candid::utils::{ArgumentDecoder, ArgumentEncoder};
-use ic_cdk::export::{candid, Principal};
 use std::any::{Any, TypeId};
 use std::cell::RefCell;
 use std::collections::BTreeMap;
+
+use ic_cdk;
+use ic_cdk::export::candid::utils::{ArgumentDecoder, ArgumentEncoder};
+use ic_cdk::export::{candid, Principal};
+
+use crate::{CallResponse, Context};
 
 static mut CONTEXT: Option<IcContext> = None;
 

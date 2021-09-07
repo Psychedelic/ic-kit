@@ -1,13 +1,15 @@
 //! Create mock handlers for simulating inter-canister calls.
 
-use crate::candid::CandidType;
-use crate::{Context, MockContext, Principal};
-use ic_cdk::api::call::CallResult;
-use ic_cdk::export::candid::utils::{ArgumentDecoder, ArgumentEncoder};
-use ic_cdk::export::candid::{decode_args, encode_args};
 use std::cell::{Ref, RefCell};
 use std::collections::hash_map::Entry;
 use std::collections::HashMap;
+
+use ic_cdk::api::call::CallResult;
+use ic_cdk::export::candid::utils::{ArgumentDecoder, ArgumentEncoder};
+use ic_cdk::export::candid::{decode_args, encode_args};
+
+use crate::candid::CandidType;
+use crate::{Context, MockContext, Principal};
 
 /// Anything that could be used to simulate a inter-canister call.
 pub trait CallHandler {

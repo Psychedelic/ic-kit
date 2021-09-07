@@ -1,7 +1,8 @@
+use serde::Deserialize;
+
 use crate::candid::{CandidType, Nat};
 use crate::interfaces::Method;
 use crate::Principal;
-use serde::Deserialize;
 
 #[derive(Deserialize, Debug, Clone, PartialOrd, PartialEq, CandidType)]
 pub struct WithCanisterId {

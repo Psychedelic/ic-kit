@@ -1,15 +1,17 @@
-use crate::candid::CandidType;
-use crate::inject::{get_context, inject};
-use crate::interface::{CallResponse, Context};
-use crate::{CallHandler, Method};
-use ic_cdk::export::candid::utils::{ArgumentDecoder, ArgumentEncoder};
-use ic_cdk::export::candid::{decode_args, encode_args};
-use ic_cdk::export::{candid, Principal};
-use serde::Serialize;
 use std::any::{Any, TypeId};
 use std::collections::{BTreeMap, BTreeSet};
 use std::hash::Hasher;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+use ic_cdk::export::candid::utils::{ArgumentDecoder, ArgumentEncoder};
+use ic_cdk::export::candid::{decode_args, encode_args};
+use ic_cdk::export::{candid, Principal};
+use serde::Serialize;
+
+use crate::candid::CandidType;
+use crate::inject::{get_context, inject};
+use crate::interface::{CallResponse, Context};
+use crate::{CallHandler, Method};
 
 /// A context that could be used to fake/control the behaviour of the IC when testing the canister.
 pub struct MockContext {
@@ -731,13 +733,17 @@ impl WatcherCall {
 
 #[cfg(test)]
 mod tests {
+    use crate::Principal;
+    use crate::{Context, MockContext};
+
     /// A simple canister implementation which helps the testing.
     mod canister {
+        use std::collections::BTreeMap;
+
         use crate::interfaces::management::WithCanisterId;
         use crate::interfaces::*;
         use crate::Context;
         use crate::{get_context, Principal};
-        use std::collections::BTreeMap;
 
         /// An update method that returns the principal id of the caller.
         pub fn whoami() -> Principal {
@@ -863,9 +869,6 @@ mod tests {
             Principal::from_text("hozae-racaq-aaaaa-aaaaa-c").unwrap()
         }
     }
-
-    use crate::Principal;
-    use crate::{Context, MockContext};
 
     #[test]
     fn test_with_id() {

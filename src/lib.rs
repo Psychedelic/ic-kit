@@ -1,9 +1,5 @@
-mod handler;
-#[cfg(target_family = "wasm")]
-mod ic;
-mod inject;
-mod interface;
-mod mock;
+pub use ic_cdk::export::candid;
+pub use ic_cdk::export::Principal;
 
 pub use handler::*;
 #[cfg(target_family = "wasm")]
@@ -11,14 +7,17 @@ pub use ic::*;
 pub use interface::*;
 pub use mock::*;
 
-pub use ic_cdk::export::candid;
-pub use ic_cdk::export::Principal;
+mod handler;
+#[cfg(target_family = "wasm")]
+mod ic;
+mod inject;
+mod interface;
+mod mock;
 
 pub mod macros {
     /// Re-export async_std test to be used for async tests when not targeting WASM.
     #[cfg(not(target_family = "wasm"))]
     pub use async_std::test;
-
     /// Re-export ic_cdk_macros.
     pub use ic_cdk_macros::*;
 }

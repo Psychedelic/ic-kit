@@ -1,5 +1,6 @@
-use crate::MockContext;
 use std::cell::RefCell;
+
+use crate::MockContext;
 
 thread_local!(static CONTEXT: RefCell<Option<MockContext>> = RefCell::new(None));
 
@@ -30,9 +31,11 @@ pub fn get_context() -> &'static mut MockContext {
 
 #[cfg(test)]
 mod tests {
-    use super::get_context;
-    use crate::{Context, MockContext};
     use std::thread;
+
+    use crate::{Context, MockContext};
+
+    use super::get_context;
 
     #[test]
     fn separate_context_for_thread() {
