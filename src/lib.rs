@@ -1,9 +1,11 @@
+mod handler;
 #[cfg(target_family = "wasm")]
 mod ic;
 mod inject;
 mod interface;
 mod mock;
 
+pub use handler::*;
 #[cfg(target_family = "wasm")]
 pub use ic::*;
 pub use interface::*;

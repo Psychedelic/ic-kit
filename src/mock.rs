@@ -1,6 +1,7 @@
+use crate::candid::CandidType;
 use crate::inject::{get_context, inject};
 use crate::interface::{CallResponse, Context};
-use ic_cdk::api::call::CallResult;
+use crate::{CallHandler, Method};
 use ic_cdk::export::candid::utils::{ArgumentDecoder, ArgumentEncoder};
 use ic_cdk::export::candid::{decode_args, encode_args};
 use ic_cdk::export::{candid, Principal};
@@ -36,15 +37,8 @@ pub struct MockContext {
     certified_data: Option<Vec<u8>>,
     /// The certificate certifying the certified_data.
     certificate: Option<Vec<u8>>,
-    /// The canisters defined in this context.
-    canisters: BTreeMap<Principal, MockCanister>,
-    /// The default handler which gets called when the canister is not found.
-    default_handler: Option<Box<dyn Fn(&mut MockContext, String, Vec<u8>) -> CallResult<Vec<u8>>>>,
-}
-
-/// A canister that could be used to simulate a certain canister on the MockContext.
-pub struct MockCanister {
-    methods: BTreeMap<String, Box<dyn Fn(&mut MockContext, Vec<u8>) -> CallResult<Vec<u8>>>>,
+    /// The handlers used to handle inter-canister calls.
+    handlers: Vec<Box<dyn CallHandler>>,
 }
 
 /// A watcher can be used to inspect the calls made in a call.
@@ -102,8 +96,7 @@ impl MockContext {
             stable: Vec::new(),
             certified_data: None,
             certificate: None,
-            canisters: BTreeMap::default(),
-            default_handler: None,
+            handlers: vec![],
         }
     }
 
@@ -256,51 +249,30 @@ impl MockContext {
         self
     }
 
-    /// Add the given canister with the given id to this context.
-    #[inline]
-    pub fn with_canister(mut self, id: Principal, canister: MockCanister) -> Self {
-        self.canisters.insert(id, canister);
-        self
-    }
-
-    /// Define a call handler that could be used for any canister/method that is not found in the
-    /// registered canisters.
-    #[inline]
-    pub fn with_default_handler<
-        T: for<'de> ArgumentDecoder<'de>,
-        R: ArgumentEncoder,
-        F: 'static + Fn(&mut MockContext, String, T) -> CallResult<R>,
-    >(
-        mut self,
-        handler: F,
-    ) -> Self {
-        self.default_handler = Some(Box::new(move |ctx, method, bytes| {
-            let args = decode_args(&bytes).expect("Failed to decode arguments.");
-            handler(ctx, method, args).map(|r| encode_args(r).expect("Failed to encode response."))
-        }));
-        self
-    }
-
     /// Creates a mock context with a default handler that accepts the given amount of cycles
     /// on every request.
     #[inline]
     pub fn with_accept_cycles_handler(self, cycles: u64) -> Self {
-        self.use_accept_cycles_handler(cycles);
-        self
+        self.with_handler(Method::new().cycles_consume(cycles))
     }
 
     /// Creates a mock context with a default handler that refunds the given amount of cycles
     /// on every request.
     #[inline]
     pub fn with_refund_cycles_handler(self, cycles: u64) -> Self {
-        self.use_refund_cycles_handler(cycles);
-        self
+        self.with_handler(Method::new().cycles_refund(cycles))
     }
 
-    /// Create a mock context with a default handler that returns the given value
+    /// Create a mock context with a default handler that returns the given value.
     #[inline]
-    pub fn with_constant_return_handler<T: ArgumentEncoder>(self, value: T) -> Self {
-        self.use_constant_return_handler(value);
+    pub fn with_constant_return_handler<T: CandidType>(self, value: T) -> Self {
+        self.with_handler(Method::new().response(value))
+    }
+
+    /// Add the given handler to the handlers pipeline.
+    #[inline]
+    pub fn with_handler<T: 'static + CallHandler>(mut self, handler: T) -> Self {
+        self.handlers.push(Box::new(handler));
         self
     }
 
@@ -382,44 +354,6 @@ impl MockContext {
         self.as_mut().caller = caller;
     }
 
-    /// Set the default handler to be a method that accepts the given amount of cycles on every
-    /// request.
-    #[inline]
-    pub fn use_accept_cycles_handler(&self, cycles: u64) {
-        self.as_mut().default_handler = Some(Box::new(move |ctx, _, _| {
-            ctx.msg_cycles_accept(cycles);
-            Ok(encode_args(()).unwrap())
-        }));
-    }
-
-    /// Set the default handler to be a method that refunds the given amount of cycles on every
-    /// request.
-    #[inline]
-    pub fn use_refund_cycles_handler(&self, cycles: u64) {
-        self.as_mut().default_handler = Some(Box::new(move |ctx, _, _| {
-            let available = ctx.msg_cycles_available();
-            if available < cycles {
-                panic!(
-                    "Can not refund {} cycles when there is only {} cycles available.",
-                    cycles, available
-                );
-            }
-            ctx.msg_cycles_accept(available - cycles);
-            Ok(encode_args(()).unwrap())
-        }));
-    }
-
-    /// Set the default handler to be a method that returns a constant value on each
-    /// call. This default method also accepts all of the cycles sent by the caller.
-    #[inline]
-    pub fn use_constant_return_handler<T: ArgumentEncoder>(&self, value: T) {
-        let bytes = encode_args(value).expect("Failed to serialize value");
-        self.as_mut().default_handler = Some(Box::new(move |ctx, _, _| {
-            ctx.msg_cycles_accept(ctx.msg_cycles_available());
-            Ok(bytes.clone())
-        }));
-    }
-
     /// Return the certified data set on the canister.
     #[inline]
     pub fn get_certified_data(&self) -> Option<Vec<u8>> {
@@ -427,37 +361,6 @@ impl MockContext {
             Some(v) => Some(v.clone()),
             None => None,
         }
-    }
-}
-
-impl MockCanister {
-    /// Create a new mock canister.
-    #[inline]
-    pub fn new() -> Self {
-        Self {
-            methods: BTreeMap::default(),
-        }
-    }
-
-    /// Mock the implementation of a certain method on the canister.
-    #[inline]
-    pub fn with_method<
-        T: for<'de> ArgumentDecoder<'de>,
-        R: ArgumentEncoder,
-        F: 'static + Fn(&mut MockContext, T) -> CallResult<R>,
-    >(
-        mut self,
-        name: &str,
-        handler: F,
-    ) -> Self {
-        self.methods.insert(
-            name.to_string(),
-            Box::new(move |ctx, bytes| {
-                let args = decode_args(&bytes).expect("Failed to decode arguments.");
-                handler(ctx, args).map(|r| encode_args(r).expect("Failed to encode response."))
-            }),
-        );
-        self
     }
 }
 
@@ -619,53 +522,32 @@ impl Context for MockContext {
         }
 
         let mut_ref = self.as_mut();
-
         mut_ref.balance -= cycles;
-
-        let maybe_cb = self
-            .canisters
-            .get(&id)
-            .map(|c| c.methods.get(method))
-            .flatten();
-
-        // Create the context for the new call.
-        let mut ctx = MockContext::new()
-            .with_id(id.clone())
-            .with_msg_cycles(cycles)
-            // Set the caller to the current canister.
-            .with_caller(self.id.clone());
-
         mut_ref.is_reply_callback_mode = true;
 
-        let res: CallResult<Vec<u8>> = if let Some(cb) = maybe_cb {
-            cb(&mut ctx, args_raw.clone())
-        } else if let Some(cb) = &self.default_handler {
-            cb(&mut ctx, method.to_string(), args_raw.clone())
-        } else {
-            mut_ref.balance += cycles;
-            panic!(
-                "No valid mock handler found for method {} on canister {}.",
-                method, id
-            );
+        let mut i = 0;
+        let (res, refunded) = loop {
+            if i == self.handlers.len() {
+                panic!("No handler found to handle the data.")
+            }
+
+            let handler = &self.handlers[i];
+            i += 1;
+
+            if handler.accept(&id, method) {
+                break handler.perform(&self.id, cycles, &id, method, &args_raw, None);
+            }
         };
 
-        let refund = if res.is_err() {
-            // Refund all of the cycles that were sent.
-            cycles
-        } else {
-            // Take the cycles that are not consumed as refunded.
-            ctx.cycles
-        };
-
-        mut_ref.cycles_refunded = refund;
-        mut_ref.balance += refund;
+        mut_ref.cycles_refunded = refunded;
+        mut_ref.balance += refunded;
 
         mut_ref.watcher.record_call(WatcherCall {
             canister_id: id,
             method_name: method.to_string(),
             args_raw,
             cycles_sent: cycles,
-            cycles_refunded: refund,
+            cycles_refunded: refunded,
         });
 
         Box::pin(async move { res })
