@@ -1,21 +1,3 @@
-# IC Kit
-
-[![Docs](https://docs.rs/ic-kit/badge.svg)](https://docs.rs/ic-kit)
-
-This library provides an alternative to `ic-cdk` that can help developers write canisters
-and unit test them in their Rust code.
-
-## Install
-
-Add this to your `Cargo.toml`
-
-```toml
-ic-kit = "0.4.0"
-```
-
-## Example Usage
-
-```rust
 use ic_kit::macros::*;
 use ic_kit::*;
 
@@ -64,5 +46,4 @@ mod tests {
     }
 }
 
-
-```
+fn main() {}

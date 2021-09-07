@@ -37,6 +37,8 @@ pub struct Method {
     atoms: Vec<MethodAtom>,
     /// If set we assert that the arguments passed to the method are this value.
     expected_args: Option<Vec<u8>>,
+    /// If set we assert the number of cycles sent to the canister.
+    expected_cycles: Option<u64>,
     /// The response that we send back from the caller. By default `()` is returned.
     response: Option<Vec<u8>>,
 }
@@ -73,6 +75,7 @@ impl Method {
             name: None,
             atoms: Vec::new(),
             expected_args: None,
+            expected_cycles: None,
             response: None,
         }
     }
@@ -124,6 +127,18 @@ impl Method {
             panic!("expect_arguments can only be called once on a method.");
         }
         self.expected_args = Some(encode_args(arguments).expect("Cannot encode arguments."));
+        self
+    }
+
+    /// Create a method that expects this amount of cycles to be sent to it.
+    ///
+    /// # Panics
+    /// If called more than once on a method.
+    pub fn expect_cycles(mut self, cycles: u64) -> Self {
+        if self.expected_cycles.is_some() {
+            panic!("expect_cycles can only be called once on a method.");
+        }
+        self.expected_cycles = Some(cycles);
         self
     }
 
@@ -253,12 +268,16 @@ impl CallHandler for Method {
         args_raw: &Vec<u8>,
         ctx: Option<&mut MockContext>,
     ) -> (CallResult<Vec<u8>>, u64) {
+        let mut default_ctx = MockContext::new().with_msg_cycles(cycles);
+        let ctx = ctx.unwrap_or(&mut default_ctx);
+
+        if let Some(expected_cycles) = &self.expected_cycles {
+            assert_eq!(*expected_cycles, ctx.msg_cycles_available());
+        }
+
         if let Some(expected_args) = &self.expected_args {
             assert_eq!(expected_args, args_raw);
         }
-
-        let mut default_ctx = MockContext::new().with_msg_cycles(cycles);
-        let ctx = ctx.unwrap_or(&mut default_ctx);
 
         for atom in &self.atoms {
             match *atom {

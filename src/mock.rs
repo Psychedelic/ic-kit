@@ -254,8 +254,15 @@ impl MockContext {
     /// Creates a mock context with a default handler that accepts the given amount of cycles
     /// on every request.
     #[inline]
-    pub fn with_accept_cycles_handler(self, cycles: u64) -> Self {
+    pub fn with_consume_cycles_handler(self, cycles: u64) -> Self {
         self.with_handler(Method::new().cycles_consume(cycles))
+    }
+
+    /// Create a mock context with a default handler that expects this amount of cycles to
+    /// be passed to it.
+    #[inline]
+    pub fn with_expect_cycles_handler(self, cycles: u64) -> Self {
+        self.with_handler(Method::new().expect_cycles(cycles))
     }
 
     /// Creates a mock context with a default handler that refunds the given amount of cycles
@@ -1039,7 +1046,7 @@ mod tests {
     #[async_std::test]
     async fn withdraw_accept() {
         let ctx = MockContext::new()
-            .with_accept_cycles_handler(200)
+            .with_consume_cycles_handler(200)
             .with_data(1000u64)
             .with_balance(2000)
             .inject();
@@ -1081,7 +1088,7 @@ mod tests {
     #[async_std::test]
     async fn withdraw_accept_portion() {
         let ctx = MockContext::new()
-            .with_accept_cycles_handler(50)
+            .with_consume_cycles_handler(50)
             .with_data(1000u64)
             .with_balance(2000)
             .inject();
@@ -1103,7 +1110,7 @@ mod tests {
     #[async_std::test]
     async fn withdraw_accept_zero() {
         let ctx = MockContext::new()
-            .with_accept_cycles_handler(0)
+            .with_consume_cycles_handler(0)
             .with_data(1000u64)
             .with_balance(2000)
             .inject();

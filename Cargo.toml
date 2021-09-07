@@ -1,6 +1,6 @@
 [package]
 name = "ic-kit"
-version = "0.3.0"
+version = "0.4.0"
 description = "Testable Canister Developer Kit for the Internet Computer."
 authors = ["Parsa Ghadimi <parsa@fleek.co>"]
 edition = "2018"
@@ -13,10 +13,10 @@ keywords = ["internet-computer", "canister", "cdk", "fleek", "development-tools:
 include = ["src", "Cargo.toml", "README.md"]
 
 [dependencies]
-ic-cdk = "0.3.0"
-ic-cdk-macros = "0.3.0"
+ic-cdk = "0.3.1"
+ic-cdk-macros = "0.3.1"
 serde = { version="1.0.130", features = ["derive"] }
-serde_bytes = "0.11"
+serde_bytes = "0.11.5"
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-async-std = { version="1.9.0", features = ["attributes"] }
+async-std = { version="1.10.0", features = ["attributes"] }
