@@ -8,8 +8,8 @@ license = "Apache-2.0"
 repository = "https://github.com/Psychedelic/ic-kit"
 homepage = "https://docs.rs/ic-kit"
 documentation = "https://docs.rs/ic-kit"
-categories = ["api-bindings", "data-structures", "testing"]
-keywords = ["internet-computer", "canister", "cdk", "fleek", "development-tools::testing"]
+categories = ["api-bindings", "data-structures", "development-tools::testing"]
+keywords = ["internet-computer", "canister", "cdk", "fleek"]
 include = ["src", "Cargo.toml", "README.md"]
 
 [dependencies]
