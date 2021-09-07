@@ -1137,4 +1137,19 @@ mod tests {
         assert_eq!(canister::user_balance(), 930);
         assert_eq!(canister::balance(), 1930);
     }
+
+    #[test]
+    #[should_panic]
+    fn trap_should_panic() {
+        let ctx = MockContext::new().inject();
+        ctx.trap("Unreachable");
+    }
+
+    #[test]
+    #[should_panic]
+    fn large_certificate_should_panic() {
+        let ctx = MockContext::new().inject();
+        let bytes = vec![0; 33];
+        ctx.set_certified_data(bytes.as_slice());
+    }
 }

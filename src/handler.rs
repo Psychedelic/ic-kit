@@ -377,3 +377,174 @@ impl CallHandler for Canister {
         res
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[should_panic]
+    fn method_repetitive_call_to_name() {
+        Method::new().name("A").name("B");
+    }
+
+    #[test]
+    fn method_name() {
+        let nameless = Method::new();
+        assert_eq!(
+            nameless.accept(&Principal::management_canister(), "XXX"),
+            true
+        );
+        let named = Method::new().name("deposit");
+        assert_eq!(
+            named.accept(&Principal::management_canister(), "XXX"),
+            false
+        );
+        assert_eq!(
+            named.accept(&Principal::management_canister(), "deposit"),
+            true
+        );
+    }
+
+    #[test]
+    fn cycles_consume_all() {
+        let alice = Principal::from_text("ai7t5-aibaq-aaaaa-aaaaa-c").unwrap();
+
+        let method = Method::new();
+        let (_, refunded) = method.perform(
+            &alice,
+            2000,
+            &Principal::management_canister(),
+            "deposit",
+            &vec![],
+            None,
+        );
+        assert_eq!(refunded, 2000);
+
+        let method = Method::new().cycles_consume_all();
+        let (_, refunded) = method.perform(
+            &alice,
+            2000,
+            &Principal::management_canister(),
+            "deposit",
+            &vec![],
+            None,
+        );
+        assert_eq!(refunded, 0);
+    }
+
+    #[test]
+    fn cycles_consume() {
+        let alice = Principal::from_text("ai7t5-aibaq-aaaaa-aaaaa-c").unwrap();
+        let method = Method::new().cycles_consume(100);
+        let (_, refunded) = method.perform(
+            &alice,
+            2000,
+            &Principal::management_canister(),
+            "deposit",
+            &vec![],
+            None,
+        );
+        assert_eq!(refunded, 1900);
+
+        let method = Method::new().cycles_consume(100).cycles_consume(150);
+        let (_, refunded) = method.perform(
+            &alice,
+            2000,
+            &Principal::management_canister(),
+            "deposit",
+            &vec![],
+            None,
+        );
+        assert_eq!(refunded, 1750);
+    }
+
+    #[test]
+    #[should_panic]
+    fn cycles_refund_panic() {
+        let alice = Principal::from_text("ai7t5-aibaq-aaaaa-aaaaa-c").unwrap();
+        let method = Method::new().cycles_refund(3000);
+        method
+            .perform(
+                &alice,
+                2000,
+                &Principal::management_canister(),
+                "deposit",
+                &vec![],
+                None,
+            )
+            .0
+            .unwrap();
+    }
+
+    #[test]
+    fn cycles_refund() {
+        let alice = Principal::from_text("ai7t5-aibaq-aaaaa-aaaaa-c").unwrap();
+        let method = Method::new().cycles_refund(100);
+        let (_, refunded) = method.perform(
+            &alice,
+            2000,
+            &Principal::management_canister(),
+            "deposit",
+            &vec![],
+            None,
+        );
+        assert_eq!(refunded, 100);
+
+        let method = Method::new().cycles_refund(170).cycles_consume(50);
+        let (_, refunded) = method.perform(
+            &alice,
+            2000,
+            &Principal::management_canister(),
+            "deposit",
+            &vec![],
+            None,
+        );
+        assert_eq!(refunded, 120);
+    }
+
+    #[test]
+    #[should_panic]
+    fn method_repetitive_call_to_expect_arguments() {
+        Method::new()
+            .expect_arguments((12,))
+            .expect_arguments((14,));
+    }
+
+    #[test]
+    #[should_panic]
+    fn expect_arguments_panic() {
+        let method = Method::new().expect_arguments((15u64,));
+        let bytes = encode_args((17u64,)).unwrap();
+        let alice = Principal::from_text("ai7t5-aibaq-aaaaa-aaaaa-c").unwrap();
+        method
+            .perform(
+                &alice,
+                2000,
+                &Principal::management_canister(),
+                "deposit",
+                &bytes,
+                None,
+            )
+            .0
+            .unwrap();
+    }
+
+    #[test]
+    fn expect_arguments() {
+        let method = Method::new().expect_arguments((17u64,));
+        let bytes = encode_args((17u64,)).unwrap();
+        let alice = Principal::from_text("ai7t5-aibaq-aaaaa-aaaaa-c").unwrap();
+        method
+            .perform(
+                &alice,
+                2000,
+                &Principal::management_canister(),
+                "deposit",
+                &bytes,
+                None,
+            )
+            .0
+            .unwrap();
+    }
+}
