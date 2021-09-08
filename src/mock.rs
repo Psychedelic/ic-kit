@@ -281,7 +281,7 @@ impl MockContext {
     /// Add the given handler to the handlers pipeline.
     #[inline]
     pub fn with_handler<T: 'static + CallHandler>(mut self, handler: T) -> Self {
-        self.handlers.push(Box::new(handler));
+        self.use_handler(handler);
         self
     }
 
@@ -370,6 +370,18 @@ impl MockContext {
             Some(v) => Some(v.clone()),
             None => None,
         }
+    }
+
+    /// Add the given handler to the call handlers pipeline.
+    #[inline]
+    pub fn use_handler<T: 'static + CallHandler>(&mut self, handler: T) {
+        self.handlers.push(Box::new(handler));
+    }
+
+    /// Remove all of the call handlers that are already registered to this context.
+    #[inline]
+    pub fn clear_handlers(&mut self) {
+        self.handlers.clear();
     }
 }
 
@@ -516,10 +528,10 @@ impl Context for MockContext {
         Ok(res)
     }
 
-    fn call_raw(
+    fn call_raw<S: Into<String>>(
         &'static self,
         id: Principal,
-        method: &'static str,
+        method: S,
         args_raw: Vec<u8>,
         cycles: u64,
     ) -> CallResponse<Vec<u8>> {
@@ -530,6 +542,7 @@ impl Context for MockContext {
             );
         }
 
+        let method = method.into();
         let mut_ref = self.as_mut();
         mut_ref.balance -= cycles;
         mut_ref.is_reply_callback_mode = true;
@@ -543,8 +556,8 @@ impl Context for MockContext {
             let handler = &self.handlers[i];
             i += 1;
 
-            if handler.accept(&id, method) {
-                break handler.perform(&self.id, cycles, &id, method, &args_raw, None);
+            if handler.accept(&id, &method) {
+                break handler.perform(&self.id, cycles, &id, &method, &args_raw, None);
             }
         };
 

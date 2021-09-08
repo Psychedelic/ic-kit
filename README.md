@@ -10,7 +10,12 @@ and unit test them in their Rust code.
 Add this to your `Cargo.toml`
 
 ```toml
+[dependencies]
 ic-kit = "0.4.0"
+ic-cdk = "0.3.1"
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+async-std = { version="1.10.0", features = ["attributes"] }
 ```
 
 ## Example Usage

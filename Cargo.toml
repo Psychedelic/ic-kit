@@ -1,6 +1,6 @@
 [package]
 name = "ic-kit"
-version = "0.4.0"
+version = "0.4.1"
 description = "Testable Canister Developer Kit for the Internet Computer."
 authors = ["Parsa Ghadimi <parsa@fleek.co>"]
 edition = "2018"
@@ -20,3 +20,6 @@ serde_bytes = "0.11.5"
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 async-std = { version="1.10.0", features = ["attributes"] }
+
+[patch.crates-io]
+num-bigint = { git = "https://github.com/rust-num/num-bigint" }

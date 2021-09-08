@@ -128,14 +128,15 @@ impl Context for IcContext {
     }
 
     #[inline(always)]
-    fn call_raw(
+    fn call_raw<S: Into<String>>(
         &'static self,
         id: Principal,
-        method: &'static str,
+        method: S,
         args_raw: Vec<u8>,
         cycles: u64,
     ) -> CallResponse<Vec<u8>> {
-        Box::pin(async move { ic_cdk::api::call::call_raw(id, method, args_raw, cycles).await })
+        let method = method.into();
+        Box::pin(async move { ic_cdk::api::call::call_raw(id, &method, args_raw, cycles).await })
     }
 
     #[inline(always)]

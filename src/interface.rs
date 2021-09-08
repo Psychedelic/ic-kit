@@ -67,34 +67,35 @@ pub trait Context {
         T: for<'de> ArgumentDecoder<'de>;
 
     /// Perform a call.
-    fn call_raw(
+    fn call_raw<S: Into<String>>(
         &'static self,
         id: Principal,
-        method: &'static str,
+        method: S,
         args_raw: Vec<u8>,
         cycles: u64,
     ) -> CallResponse<Vec<u8>>;
 
     /// Perform the call and return the response.
     #[inline(always)]
-    fn call<T: ArgumentEncoder, R: for<'a> ArgumentDecoder<'a>>(
+    fn call<T: ArgumentEncoder, R: for<'a> ArgumentDecoder<'a>, S: Into<String>>(
         &'static self,
         id: Principal,
-        method: &'static str,
+        method: S,
         args: T,
     ) -> CallResponse<R> {
         self.call_with_payment(id, method, args, 0)
     }
 
     #[inline(always)]
-    fn call_with_payment<T: ArgumentEncoder, R: for<'a> ArgumentDecoder<'a>>(
+    fn call_with_payment<T: ArgumentEncoder, R: for<'a> ArgumentDecoder<'a>, S: Into<String>>(
         &'static self,
         id: Principal,
-        method: &'static str,
+        method: S,
         args: T,
         cycles: u64,
     ) -> CallResponse<R> {
         let args_raw = encode_args(args).expect("Failed to encode arguments.");
+        let method = method.into();
         Box::pin(async move {
             let bytes = self.call_raw(id, method, args_raw, cycles).await?;
             decode_args(&bytes).map_err(|err| panic!("{:?}", err))
