@@ -1,15 +1,13 @@
 pub use handler::*;
-#[cfg(target_family = "wasm")]
-pub use wasm::*;
 pub use interface::*;
 pub use mock::*;
 
 mod handler;
-#[cfg(target_family = "wasm")]
-mod wasm;
 mod inject;
 mod interface;
 mod mock;
+#[cfg(target_family = "wasm")]
+mod wasm;
 
 /// async_std::test to be used for async tests when not targeting WASM.
 #[cfg(not(target_family = "wasm"))]
@@ -45,14 +43,17 @@ pub mod mock_principals {
     }
 }
 
+/// APIs/Methods to work with the Internet Computer.
+pub mod ic;
 /// The type definition of common canisters on the Internet Computer.
 pub mod interfaces;
 
 /// Return the IC context depending on the build target.
 #[inline(always)]
+#[deprecated(note = "get_context is deprecated use ic_kit::ic::*")]
 pub fn get_context() -> &'static impl Context {
     #[cfg(not(target_family = "wasm"))]
     return inject::get_context();
     #[cfg(target_family = "wasm")]
-    return IcContext::context();
+    return wasm::IcContext::context();
 }

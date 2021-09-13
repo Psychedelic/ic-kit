@@ -1,5 +1,4 @@
 use std::any::{Any, TypeId};
-use std::cell::RefCell;
 use std::collections::BTreeMap;
 
 use ic_cdk;
