@@ -1,12 +1,12 @@
 pub use handler::*;
 #[cfg(target_family = "wasm")]
-pub use ic::*;
+pub use wasm::*;
 pub use interface::*;
 pub use mock::*;
 
 mod handler;
 #[cfg(target_family = "wasm")]
-mod ic;
+mod wasm;
 mod inject;
 mod interface;
 mod mock;
@@ -50,7 +50,7 @@ pub mod interfaces;
 
 /// Return the IC context depending on the build target.
 #[inline(always)]
-pub fn get_context() -> &'static mut impl Context {
+pub fn get_context() -> &'static impl Context {
     #[cfg(not(target_family = "wasm"))]
     return inject::get_context();
     #[cfg(target_family = "wasm")]
