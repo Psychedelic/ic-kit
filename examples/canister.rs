@@ -3,14 +3,12 @@ use ic_kit::*;
 
 #[update]
 fn whoami() -> Principal {
-    let ic = get_context();
-    ic.caller()
+    ic::caller()
 }
 
 #[update]
 async fn send_cycles(canister_id: Principal, cycles: u64) -> Result<(), String> {
-    let ic = get_context();
-    ic.call_with_payment(canister_id, "wallet_accept", (), cycles)
+    ic::call_with_payment(canister_id, "wallet_accept", (), cycles)
         .await
         .map_err(|(code, msg)| format!("Call failed with code={}: {}", code as u8, msg))
 }

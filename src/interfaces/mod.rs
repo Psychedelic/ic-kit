@@ -1,5 +1,6 @@
 use crate::candid::utils::{ArgumentDecoder, ArgumentEncoder};
-use crate::{CallResponse, Context, Principal};
+use crate::{CallResponse, Principal};
+use crate::ic;
 
 pub mod management;
 
@@ -10,21 +11,19 @@ pub trait Method {
     type Response: for<'de> ArgumentDecoder<'de>;
 
     #[inline]
-    fn perform<T: Context>(
-        ctx: &'static T,
+    fn perform(
         id: Principal,
         args: Self::Arguments,
     ) -> CallResponse<Self::Response> {
-        ctx.call(id, Self::NAME, args)
+        ic::call(id, Self::NAME, args)
     }
 
     #[inline]
-    fn perform_with_payment<T: Context>(
-        ctx: &'static T,
+    fn perform_with_payment(
         id: Principal,
         args: Self::Arguments,
         cycles: u64,
     ) -> CallResponse<Self::Response> {
-        ctx.call_with_payment(id, Self::NAME, args, cycles)
+        ic::call_with_payment(id, Self::NAME, args, cycles)
     }
 }

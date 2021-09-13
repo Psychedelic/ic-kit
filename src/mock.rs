@@ -780,61 +780,53 @@ mod tests {
 
         use crate::interfaces::management::WithCanisterId;
         use crate::interfaces::*;
-        use crate::Context;
-        use crate::{get_context, Principal};
+        use crate::Principal;
+        use crate::ic;
 
         /// An update method that returns the principal id of the caller.
         pub fn whoami() -> Principal {
-            let ic = get_context();
-            ic.caller()
+            ic::caller()
         }
 
         /// An update method that returns the principal id of the canister.
         pub fn canister_id() -> Principal {
-            let ic = get_context();
-            ic.id()
+            ic::id()
         }
 
         /// An update method that returns the balance of the canister.
         pub fn balance() -> u64 {
-            let ic = get_context();
-            ic.balance()
+            ic::balance()
         }
 
         /// An update method that returns the number of cycles provided by the user in the call.
         pub fn msg_cycles_available() -> u64 {
-            let ic = get_context();
-            ic.msg_cycles_available()
+            ic::msg_cycles_available()
         }
 
         /// An update method that accepts the given number of cycles from the caller, the number of
         /// accepted cycles is returned.
         pub fn msg_cycles_accept(cycles: u64) -> u64 {
-            let ic = get_context();
-            ic.msg_cycles_accept(cycles)
+            ic::msg_cycles_accept(cycles)
         }
 
         pub type Counter = BTreeMap<u64, i64>;
 
         /// An update method that increments one to the given key, the new value is returned.
         pub fn increment(key: u64) -> i64 {
-            let ic = get_context();
-            let count = ic.get_mut::<Counter>().entry(key).or_insert(0);
+            let count = ic::get_mut::<Counter>().entry(key).or_insert(0);
             *count += 1;
             *count
         }
 
         /// An update method that decrement one from the given key. The new value is returned.
         pub fn decrement(key: u64) -> i64 {
-            let ic = get_context();
-            let count = ic.get_mut::<Counter>().entry(key).or_insert(0);
+            let count = ic::get_mut::<Counter>().entry(key).or_insert(0);
             *count -= 1;
             *count
         }
 
         pub async fn withdraw(canister_id: Principal, amount: u64) -> Result<(), String> {
-            let ic = get_context();
-            let user_balance = ic.get_mut::<u64>();
+            let user_balance = ic::get_mut::<u64>();
 
             if amount > *user_balance {
                 return Err(format!("Insufficient balance."));
@@ -843,7 +835,6 @@ mod tests {
             *user_balance -= amount;
 
             match management::DepositCycles::perform_with_payment(
-                ic,
                 Principal::management_canister(),
                 (WithCanisterId { canister_id },),
                 amount,
@@ -851,11 +842,11 @@ mod tests {
             .await
             {
                 Ok(()) => {
-                    *user_balance += ic.msg_cycles_refunded();
+                    *user_balance += ic::msg_cycles_refunded();
                     Ok(())
                 }
                 Err((code, msg)) => {
-                    assert_eq!(amount, ic.msg_cycles_refunded());
+                    assert_eq!(amount, ic::msg_cycles_refunded());
                     *user_balance += amount;
                     Err(format!(
                         "An error happened during the call: {}: {}",
@@ -866,32 +857,27 @@ mod tests {
         }
 
         pub fn user_balance() -> u64 {
-            let ic = get_context();
-            *ic.get::<u64>()
+            *ic::get::<u64>()
         }
 
         pub fn pre_upgrade() {
-            let ic = get_context();
-            let map = ic.get::<Counter>();
-            ic.stable_store((map,))
+            let map = ic::get::<Counter>();
+            ic::stable_store((map,))
                 .expect("Failed to write to stable storage");
         }
 
         pub fn post_upgrade() {
-            let ic = get_context();
-            if let Ok((map,)) = ic.stable_restore() {
-                ic.store::<Counter>(map);
+            if let Ok((map,)) = ic::stable_restore() {
+                ic::store::<Counter>(map);
             }
         }
 
         pub fn set_certified_data(data: &[u8]) {
-            let ic = get_context();
-            ic.set_certified_data(data);
+            ic::set_certified_data(data);
         }
 
         pub fn data_certificate() -> Option<Vec<u8>> {
-            let ic = get_context();
-            ic.data_certificate()
+            ic::data_certificate()
         }
     }
 
