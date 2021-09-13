@@ -2,6 +2,7 @@ use std::any::{Any, TypeId};
 use std::collections::{BTreeMap, BTreeSet};
 use std::hash::Hasher;
 use std::time::{SystemTime, UNIX_EPOCH};
+use futures::executor::LocalPool;
 
 use ic_cdk::export::candid::utils::{ArgumentDecoder, ArgumentEncoder};
 use ic_cdk::export::candid::{decode_args, encode_args};
@@ -12,6 +13,7 @@ use crate::candid::CandidType;
 use crate::inject::{get_context, inject};
 use crate::interface::{CallResponse, Context};
 use crate::{CallHandler, Method};
+use futures::task::SpawnExt;
 
 /// A context that could be used to fake/control the behaviour of the IC when testing the canister.
 pub struct MockContext {
@@ -41,6 +43,8 @@ pub struct MockContext {
     certificate: Option<Vec<u8>>,
     /// The handlers used to handle inter-canister calls.
     handlers: Vec<Box<dyn CallHandler>>,
+    /// All of the spawned futures.
+    pool: LocalPool
 }
 
 /// A watcher can be used to inspect the calls made in a call.
@@ -99,6 +103,7 @@ impl MockContext {
             certified_data: None,
             certificate: None,
             handlers: vec![],
+            pool: LocalPool::new()
         }
     }
 
@@ -383,6 +388,12 @@ impl MockContext {
     pub fn clear_handlers(&mut self) {
         self.handlers.clear();
     }
+
+    /// Block the current thread until all the spawned futures are complete.
+    #[inline]
+    pub fn join(&mut self) {
+        self.pool.run();
+    }
 }
 
 impl Context for MockContext {
@@ -594,6 +605,13 @@ impl Context for MockContext {
             Some(c) => Some(c.clone()),
             None => None,
         }
+    }
+
+    #[inline]
+    fn spawn<F: 'static + std::future::Future<Output = ()> + std::marker::Send>(&self, future: F) {
+        // TODO(qti3e) Setup the context in the thread.
+        let spawner = self.pool.spawner();
+        spawner.spawn(future).unwrap();
     }
 }
 
