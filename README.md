@@ -11,7 +11,7 @@ Add this to your `Cargo.toml`
 
 ```toml
 [dependencies]
-ic-kit = "0.4.0"
+ic-kit = "0.4.2"
 ic-cdk = "0.3.1"
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]

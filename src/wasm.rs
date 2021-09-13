@@ -6,7 +6,6 @@ use ic_cdk::export::candid::utils::{ArgumentDecoder, ArgumentEncoder};
 use ic_cdk::export::{candid, Principal};
 
 use crate::{CallResponse, Context};
-use std::future::Future;
 
 static mut CONTEXT: Option<IcContext> = None;
 
@@ -150,7 +149,7 @@ impl Context for IcContext {
     }
 
     #[inline(always)]
-    fn spawn<F: 'static + std::future::Future<Output = ()> + std::marker::Send>(&self, future: F);
+    fn spawn<F: 'static + std::future::Future<Output = ()> + std::marker::Send>(&self, future: F) {
         ic_cdk::block_on(future)
     }
 }
