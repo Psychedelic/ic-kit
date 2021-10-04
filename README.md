@@ -11,7 +11,7 @@ Add this to your `Cargo.toml`
 
 ```toml
 [dependencies]
-ic-kit = "0.4.2"
+ic-kit = "0.4.3"
 ic-cdk = "0.3.1"
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
@@ -22,18 +22,16 @@ async-std = { version="1.10.0", features = ["attributes"] }
 
 ```rust
 use ic_kit::macros::*;
-use ic_kit::*;
+use ic_kit::{ic, Principal};
 
 #[update]
 fn whoami() -> Principal {
-    let ic = get_context();
-    ic.caller()
+    ic::caller()
 }
 
 #[update]
 async fn send_cycles(canister_id: Principal, cycles: u64) -> Result<(), String> {
-    let ic = get_context();
-    ic.call_with_payment(canister_id, "wallet_accept", (), cycles)
+    ic::call_with_payment(canister_id, "wallet_accept", (), cycles)
         .await
         .map_err(|(code, msg)| format!("Call failed with code={}: {}", code as u8, msg))
 }
@@ -41,6 +39,7 @@ async fn send_cycles(canister_id: Principal, cycles: u64) -> Result<(), String> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ic_kit::{mock_principals, MockContext};
 
     #[test]
     fn test_whoami() {
@@ -68,6 +67,4 @@ mod tests {
         assert_eq!(watcher.cycles_sent(), 5000);
     }
 }
-
-
 ```

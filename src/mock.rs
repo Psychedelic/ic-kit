@@ -1,8 +1,8 @@
+use futures::executor::LocalPool;
 use std::any::{Any, TypeId};
 use std::collections::{BTreeMap, BTreeSet};
 use std::hash::Hasher;
 use std::time::{SystemTime, UNIX_EPOCH};
-use futures::executor::LocalPool;
 
 use ic_cdk::export::candid::utils::{ArgumentDecoder, ArgumentEncoder};
 use ic_cdk::export::candid::{decode_args, encode_args};
@@ -44,7 +44,7 @@ pub struct MockContext {
     /// The handlers used to handle inter-canister calls.
     handlers: Vec<Box<dyn CallHandler>>,
     /// All of the spawned futures.
-    pool: LocalPool
+    pool: LocalPool,
 }
 
 /// A watcher can be used to inspect the calls made in a call.
@@ -103,7 +103,7 @@ impl MockContext {
             certified_data: None,
             certificate: None,
             handlers: vec![],
-            pool: LocalPool::new()
+            pool: LocalPool::new(),
         }
     }
 
@@ -473,11 +473,19 @@ impl Context for MockContext {
     }
 
     #[inline]
-    fn store<T: 'static + Default>(&self, data: T) {
+    fn store<T: 'static>(&self, data: T) {
         let type_id = TypeId::of::<T>();
         let mut_ref = self.as_mut();
         mut_ref.watcher.storage_modified.insert(type_id);
         mut_ref.storage.insert(type_id, Box::new(data));
+    }
+
+    #[inline]
+    fn get_maybe<T: 'static>(&self) -> Option<&T> {
+        let type_id = std::any::TypeId::of::<T>();
+        self.storage
+            .get(&type_id)
+            .map(|b| b.downcast_ref().expect("Unexpected value of invalid type."))
     }
 
     #[inline]
@@ -778,10 +786,10 @@ mod tests {
     mod canister {
         use std::collections::BTreeMap;
 
+        use crate::ic;
         use crate::interfaces::management::WithCanisterId;
         use crate::interfaces::*;
         use crate::Principal;
-        use crate::ic;
 
         /// An update method that returns the principal id of the caller.
         pub fn whoami() -> Principal {
@@ -862,8 +870,7 @@ mod tests {
 
         pub fn pre_upgrade() {
             let map = ic::get::<Counter>();
-            ic::stable_store((map,))
-                .expect("Failed to write to stable storage");
+            ic::stable_store((map,)).expect("Failed to write to stable storage");
         }
 
         pub fn post_upgrade() {

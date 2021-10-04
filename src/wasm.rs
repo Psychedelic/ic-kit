@@ -88,9 +88,17 @@ impl Context for IcContext {
     }
 
     #[inline(always)]
-    fn store<T: 'static + Default>(&self, data: T) {
+    fn store<T: 'static>(&self, data: T) {
         let type_id = TypeId::of::<T>();
         self.as_mut().storage.insert(type_id, Box::new(data));
+    }
+
+    #[inline]
+    fn get_maybe<T: 'static>(&self) -> Option<&T> {
+        let type_id = std::any::TypeId::of::<T>();
+        self.storage
+            .get(&type_id)
+            .map(|b| b.downcast_ref().expect("Unexpected value of invalid type."))
     }
 
     #[inline(always)]

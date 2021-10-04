@@ -1,6 +1,6 @@
 use crate::candid::utils::{ArgumentDecoder, ArgumentEncoder};
-use crate::{CallResponse, Principal};
 use crate::ic;
+use crate::{CallResponse, Principal};
 
 pub mod management;
 
@@ -11,10 +11,7 @@ pub trait Method {
     type Response: for<'de> ArgumentDecoder<'de>;
 
     #[inline]
-    fn perform(
-        id: Principal,
-        args: Self::Arguments,
-    ) -> CallResponse<Self::Response> {
+    fn perform(id: Principal, args: Self::Arguments) -> CallResponse<Self::Response> {
         ic::call(id, Self::NAME, args)
     }
 

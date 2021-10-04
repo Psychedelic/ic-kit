@@ -38,7 +38,10 @@ pub trait Context {
     fn msg_cycles_refunded(&self) -> u64;
 
     /// Store the given data to the storage.
-    fn store<T: 'static + Default>(&self, data: T);
+    fn store<T: 'static>(&self, data: T);
+
+    /// Return the data that does not implement [`Default`].
+    fn get_maybe<T: 'static>(&self) -> Option<&T>;
 
     /// Return the data associated with the given type. If the data is not present the default
     /// value of the type is returned.

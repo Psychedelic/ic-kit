@@ -1,6 +1,7 @@
 use crate::candid::utils::{ArgumentDecoder, ArgumentEncoder};
 use crate::{candid, CallResponse, Context, Principal};
 
+#[inline(always)]
 fn get_context() -> &'static impl Context {
     #[cfg(not(target_family = "wasm"))]
     return crate::inject::get_context();
@@ -65,8 +66,14 @@ pub fn msg_cycles_refunded() -> u64 {
 
 /// Store the given data to the storage.
 #[inline(always)]
-pub fn store<T: 'static + Default>(data: T) {
+pub fn store<T: 'static>(data: T) {
     get_context().store(data)
+}
+
+/// Return the data that does not implement [`Default`].
+#[inline(always)]
+pub fn get_maybe<T: 'static>() -> Option<&'static T> {
+    get_context().get_maybe()
 }
 
 /// Return the data associated with the given type. If the data is not present the default
@@ -150,4 +157,10 @@ pub fn set_certified_data(data: &[u8]) {
 #[inline(always)]
 pub fn data_certificate() -> Option<Vec<u8>> {
     get_context().data_certificate()
+}
+
+/// Execute a future without blocking the current call.
+#[inline(always)]
+pub fn spawn<F: 'static + std::future::Future<Output = ()> + std::marker::Send>(future: F) {
+    get_context().spawn(future)
 }

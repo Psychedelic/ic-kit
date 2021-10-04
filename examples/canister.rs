@@ -1,5 +1,5 @@
 use ic_kit::macros::*;
-use ic_kit::*;
+use ic_kit::{ic, Principal};
 
 #[update]
 fn whoami() -> Principal {
@@ -16,6 +16,7 @@ async fn send_cycles(canister_id: Principal, cycles: u64) -> Result<(), String> 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ic_kit::{mock_principals, MockContext};
 
     #[test]
     fn test_whoami() {
