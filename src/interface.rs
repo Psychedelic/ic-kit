@@ -112,5 +112,5 @@ pub trait Context {
     fn data_certificate(&self) -> Option<Vec<u8>>;
 
     /// Execute a future without blocking the current call.
-    fn spawn<F: 'static + std::future::Future<Output = ()> + std::marker::Send>(&self, future: F);
+    fn spawn<F: 'static + std::future::Future<Output = ()>>(&mut self, future: F);
 }

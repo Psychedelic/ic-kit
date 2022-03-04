@@ -1,5 +1,5 @@
 use ic_kit::macros::*;
-use ic_kit::{ic, Principal};
+use ic_kit::{ic, Principal, async_test};
 
 #[update]
 fn whoami() -> Principal {
@@ -11,6 +11,10 @@ async fn send_cycles(canister_id: Principal, cycles: u64) -> Result<(), String> 
     ic::call_with_payment(canister_id, "wallet_accept", (), cycles)
         .await
         .map_err(|(code, msg)| format!("Call failed with code={}: {}", code as u8, msg))
+}
+
+async fn async_job (canister_id: Principal, cycles: u64) {
+    let _ = send_cycles(canister_id, cycles).await;
 }
 
 #[cfg(test)]
@@ -39,6 +43,20 @@ mod tests {
         let watcher = ctx.watch();
 
         send_cycles(mock_principals::xtc(), 5000).await.unwrap();
+
+        assert_eq!(watcher.cycles_consumed(), 1000);
+        assert_eq!(watcher.cycles_sent(), 5000);
+    }
+
+    #[async_test]
+    async fn test_spawn() {
+        let ctx = MockContext::new()
+            .with_consume_cycles_handler(1000)
+            .inject();
+
+        let watcher = ctx.watch();
+
+        ic::spawn(async_job(mock_principals::xtc(), 5000));
 
         assert_eq!(watcher.cycles_consumed(), 1000);
         assert_eq!(watcher.cycles_sent(), 5000);

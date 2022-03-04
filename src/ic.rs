@@ -2,7 +2,7 @@ use crate::candid::utils::{ArgumentDecoder, ArgumentEncoder};
 use crate::{candid, CallResponse, Context, Principal};
 
 #[inline(always)]
-fn get_context() -> &'static impl Context {
+fn get_context() -> &'static mut impl Context {
     #[cfg(not(target_family = "wasm"))]
     return crate::inject::get_context();
     #[cfg(target_family = "wasm")]
@@ -161,6 +161,6 @@ pub fn data_certificate() -> Option<Vec<u8>> {
 
 /// Execute a future without blocking the current call.
 #[inline(always)]
-pub fn spawn<F: 'static + std::future::Future<Output = ()> + std::marker::Send>(future: F) {
+pub fn spawn<F: 'static + std::future::Future<Output = ()>>(future: F) {
     get_context().spawn(future)
 }

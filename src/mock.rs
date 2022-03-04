@@ -13,7 +13,6 @@ use crate::candid::CandidType;
 use crate::inject::{get_context, inject};
 use crate::interface::{CallResponse, Context};
 use crate::{CallHandler, Method};
-use futures::task::SpawnExt;
 
 /// A context that could be used to fake/control the behaviour of the IC when testing the canister.
 pub struct MockContext {
@@ -616,10 +615,9 @@ impl Context for MockContext {
     }
 
     #[inline]
-    fn spawn<F: 'static + std::future::Future<Output = ()> + std::marker::Send>(&self, future: F) {
+    fn spawn<F: 'static + std::future::Future<Output = ()>>(&mut self, future: F) {
         // TODO(qti3e) Setup the context in the thread.
-        let spawner = self.pool.spawner();
-        spawner.spawn(future).unwrap();
+        self.pool.run_until(future)
     }
 }
 
