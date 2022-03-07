@@ -157,7 +157,7 @@ impl Context for IcContext {
     }
 
     #[inline(always)]
-    fn spawn<F: 'static + std::future::Future<Output = ()> + std::marker::Send>(&self, future: F) {
-        ic_cdk::block_on(future)
+    fn spawn<F: 'static + std::future::Future<Output = ()>>(&mut self, future: F) {
+        ic_cdk::spawn(future)
     }
 }

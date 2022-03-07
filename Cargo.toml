@@ -13,8 +13,9 @@ keywords = ["internet-computer", "canister", "cdk", "fleek"]
 include = ["src", "Cargo.toml", "README.md"]
 
 [dependencies]
-ic-cdk = "0.3.1"
-ic-cdk-macros = "0.3.1"
+ic-cdk = "0.4.0"
+ic-cdk-macros = "0.4.0"
+candid="0.7.10"
 serde = { version="1.0.130", features = ["derive"] }
 serde_bytes = "0.11.5"
 futures = "0.3.17"
