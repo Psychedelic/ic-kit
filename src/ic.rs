@@ -1,5 +1,5 @@
 use crate::candid::utils::{ArgumentDecoder, ArgumentEncoder};
-use crate::{candid, CallResponse, Context, Principal};
+use crate::{candid, CallResponse, Context, Principal, StableMemoryError};
 
 #[inline(always)]
 fn get_context() -> &'static mut impl Context {
@@ -163,4 +163,32 @@ pub fn data_certificate() -> Option<Vec<u8>> {
 #[inline(always)]
 pub fn spawn<F: 'static + std::future::Future<Output = ()>>(future: F) {
     get_context().spawn(future)
+}
+
+/// Returns the current size of the stable memory in WebAssembly pages.
+/// (One WebAssembly page is 64KiB)
+#[inline(always)]
+pub fn stable_size() -> u32 {
+    get_context().stable_size()
+}
+
+/// Tries to grow the memory by new_pages many pages containing zeroes.
+/// This system call traps if the previous size of the memory exceeds 2^32 bytes.
+/// Errors if the new size of the memory exceeds 2^32 bytes or growing is unsuccessful.
+/// Otherwise, it grows the memory and returns the previous size of the memory in pages.
+#[inline(always)]
+pub fn stable_grow(new_pages: u32) -> Result<u32, StableMemoryError> {
+    get_context().stable_grow(new_pages)
+}
+
+/// Writes data to the stable memory location specified by an offset.
+#[inline(always)]
+pub fn stable_write(offset: u32, buf: &[u8]) {
+    get_context().stable_write(offset, buf)
+}
+
+/// Reads data from the stable memory location specified by an offset.
+#[inline(always)]
+pub fn stable_read(offset: u32, buf: &mut [u8]) {
+    get_context().stable_read(offset, buf)
 }

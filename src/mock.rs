@@ -12,7 +12,7 @@ use serde::Serialize;
 use crate::candid::CandidType;
 use crate::inject::{get_context, inject};
 use crate::interface::{CallResponse, Context};
-use crate::{CallHandler, Method};
+use crate::{CallHandler, Method, StableMemoryError};
 
 /// A context that could be used to fake/control the behaviour of the IC when testing the canister.
 pub struct MockContext {
@@ -126,8 +126,7 @@ impl MockContext {
     ///     .with_id(id.clone())
     ///     .inject();
     ///
-    /// let ic = get_context();
-    /// assert_eq!(ic.id(), id);
+    /// assert_eq!(ic::id(), id);
     /// ```
     #[inline]
     pub fn with_id(mut self, id: Principal) -> Self {
@@ -146,8 +145,7 @@ impl MockContext {
     ///     .with_balance(1000)
     ///     .inject();
     ///
-    /// let ic = get_context();
-    /// assert_eq!(ic.balance(), 1000);
+    /// assert_eq!(ic::balance(), 1000);
     /// ```
     #[inline]
     pub fn with_balance(mut self, cycles: u64) -> Self {
@@ -168,8 +166,7 @@ impl MockContext {
     ///     .with_caller(alice.clone())
     ///     .inject();
     ///
-    /// let ic = get_context();
-    /// assert_eq!(ic.caller(), alice);
+    /// assert_eq!(ic::caller(), alice);
     /// ```
     #[inline]
     pub fn with_caller(mut self, caller: Principal) -> Self {
@@ -190,10 +187,9 @@ impl MockContext {
     ///     .with_msg_cycles(1000)
     ///     .inject();
     ///
-    /// let ic = get_context();
-    /// assert_eq!(ic.msg_cycles_available(), 1000);
-    /// ic.msg_cycles_accept(300);
-    /// assert_eq!(ic.msg_cycles_available(), 700);
+    /// assert_eq!(ic::msg_cycles_available(), 1000);
+    /// ic::msg_cycles_accept(300);
+    /// assert_eq!(ic::msg_cycles_available(), 700);
     /// ```
     #[inline]
     pub fn with_msg_cycles(mut self, cycles: u64) -> Self {
@@ -212,8 +208,7 @@ impl MockContext {
     ///     .with_data(String::from("Hello"))
     ///     .inject();
     ///
-    /// let ic = get_context();
-    /// assert_eq!(ic.get::<String>(), &"Hello".to_string());
+    /// assert_eq!(ic::get::<String>(), &"Hello".to_string());
     /// ```
     #[inline]
     pub fn with_data<T: 'static>(mut self, data: T) -> Self {
@@ -233,8 +228,7 @@ impl MockContext {
     ///     .with_stable(("Bella".to_string(), ))
     ///     .inject();
     ///
-    /// let ic = get_context();
-    /// assert_eq!(ic.stable_restore::<(String, )>(), Ok(("Bella".to_string(), )));
+    /// assert_eq!(ic::stable_restore::<(String, )>(), Ok(("Bella".to_string(), )));
     /// ```
     #[inline]
     pub fn with_stable<T: Serialize>(self, data: T) -> Self
@@ -526,7 +520,18 @@ impl Context for MockContext {
     {
         let mut_ref = self.as_mut();
         mut_ref.watcher.called_stable_store = true;
-        mut_ref.stable = encode_args(data)?;
+
+        let data = encode_args(data)?;
+        let pages = ((data.len() >> 16) + 1) as u32;
+        let capacity = self.stable_size();
+        if pages > capacity {
+            self.stable_grow(pages - capacity);
+        }
+
+        for (i, b) in data.iter().enumerate() {
+            mut_ref.stable[i] = *b;
+        }
+
         Ok(())
     }
 
@@ -616,8 +621,55 @@ impl Context for MockContext {
 
     #[inline]
     fn spawn<F: 'static + std::future::Future<Output = ()>>(&mut self, future: F) {
-        // TODO(qti3e) Setup the context in the thread.
+        // TODO(qti3e) Setup the context in the pool thread.
         self.pool.run_until(future)
+    }
+
+    #[inline]
+    fn stable_size(&self) -> u32 {
+        (self.stable.len() >> 16) as u32
+    }
+
+    #[inline]
+    fn stable_grow(&self, new_pages: u32) -> Result<u32, StableMemoryError> {
+        let old_pages = (self.stable.len() >> 16) as u32;
+
+        if old_pages > 65536 {
+            panic!("stable storage");
+        }
+
+        let pages = old_pages + new_pages;
+        if pages > 65536 {
+            return Err(StableMemoryError());
+        }
+
+        let new_size = (pages as usize) << 16;
+        let additional = new_size - self.stable.len();
+        let stable = &mut self.as_mut().stable;
+        stable.reserve(additional);
+        for _ in 0..additional {
+            stable.push(0);
+        }
+
+        Ok(old_pages)
+    }
+
+    #[inline]
+    fn stable_write(&self, offset: u32, buf: &[u8]) {
+        let stable = &mut self.as_mut().stable;
+        for (i, &b) in buf.iter().enumerate() {
+            let index = (offset + i) as usize;
+            stable[index] = b;
+        }
+    }
+
+    #[inline]
+    fn stable_read(&self, offset: u32, buf: &mut [u8]) {
+        let stable = &mut self.as_mut().stable;
+        for (i, b) in buf.iter_mut().enumerate() {
+            let index = (offset + i) as usize;
+            *b = stable[index]
+        }
     }
 }
 

@@ -5,7 +5,7 @@ use ic_cdk;
 use ic_cdk::export::candid::utils::{ArgumentDecoder, ArgumentEncoder};
 use ic_cdk::export::{candid, Principal};
 
-use crate::{CallResponse, Context};
+use crate::{CallResponse, Context, StableMemoryError};
 
 static mut CONTEXT: Option<IcContext> = None;
 
@@ -159,5 +159,25 @@ impl Context for IcContext {
     #[inline(always)]
     fn spawn<F: 'static + std::future::Future<Output = ()>>(&mut self, future: F) {
         ic_cdk::spawn(future)
+    }
+
+    #[inline(always)]
+    fn stable_size(&self) -> u32 {
+        ic_cdk::api::stable::stable_size()
+    }
+
+    #[inline(always)]
+    fn stable_grow(&self, new_pages: u32) -> Result<u32, StableMemoryError> {
+        ic_cdk::api::stable::stable_grow(new_pages).map_err(|_| StableMemoryError())
+    }
+
+    #[inline(always)]
+    fn stable_write(&self, offset: u32, buf: &[u8]) {
+        ic_cdk::api::stable::stable_write(offset, buf)
+    }
+
+    #[inline(always)]
+    fn stable_read(&self, offset: u32, buf: &mut [u8]) {
+        ic_cdk::api::stable::stable_read(offset, buf)
     }
 }
