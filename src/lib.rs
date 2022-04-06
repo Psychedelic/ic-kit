@@ -48,6 +48,7 @@ pub mod mock_principals {
 pub mod ic;
 /// The type definition of common canisters on the Internet Computer.
 pub mod interfaces;
+mod stable;
 
 /// Return the IC context depending on the build target.
 #[inline(always)]

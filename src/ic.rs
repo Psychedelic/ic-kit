@@ -1,4 +1,5 @@
 use crate::candid::utils::{ArgumentDecoder, ArgumentEncoder};
+pub use crate::stable::*;
 use crate::{candid, CallResponse, Context, Principal, StableMemoryError};
 
 #[inline(always)]
@@ -191,4 +192,19 @@ pub fn stable_write(offset: u32, buf: &[u8]) {
 #[inline(always)]
 pub fn stable_read(offset: u32, buf: &mut [u8]) {
     get_context().stable_read(offset, buf)
+}
+
+/// Returns a copy of the stable memory.
+///
+/// This will map the whole memory (even if not all of it has been written to).
+pub fn stable_bytes() -> Vec<u8> {
+    let size = (stable_size() as usize) << 16;
+    let mut vec = Vec::with_capacity(size);
+    unsafe {
+        vec.set_len(size);
+    }
+
+    stable_read(0, vec.as_mut_slice());
+
+    vec
 }

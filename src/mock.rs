@@ -2,16 +2,18 @@ use futures::executor::LocalPool;
 use std::any::{Any, TypeId};
 use std::collections::{BTreeMap, BTreeSet};
 use std::hash::Hasher;
+use std::io::Write;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use ic_cdk::export::candid::decode_args;
 use ic_cdk::export::candid::utils::{ArgumentDecoder, ArgumentEncoder};
-use ic_cdk::export::candid::{decode_args, encode_args};
 use ic_cdk::export::{candid, Principal};
 use serde::Serialize;
 
 use crate::candid::CandidType;
 use crate::inject::{get_context, inject};
 use crate::interface::{CallResponse, Context};
+use crate::stable::StableWriter;
 use crate::{CallHandler, Method, StableMemoryError};
 
 /// A context that could be used to fake/control the behaviour of the IC when testing the canister.
@@ -518,21 +520,8 @@ impl Context for MockContext {
     where
         T: ArgumentEncoder,
     {
-        let mut_ref = self.as_mut();
-        mut_ref.watcher.called_stable_store = true;
-
-        let data = encode_args(data)?;
-        let pages = ((data.len() >> 16) + 1) as u32;
-        let capacity = self.stable_size();
-        if pages > capacity {
-            self.stable_grow(pages - capacity);
-        }
-
-        for (i, b) in data.iter().enumerate() {
-            mut_ref.stable[i] = *b;
-        }
-
-        Ok(())
+        self.as_mut().watcher.called_stable_store = true;
+        candid::write_args(&mut StableWriter::default(), data)
     }
 
     #[inline]
@@ -541,10 +530,12 @@ impl Context for MockContext {
         T: for<'de> ArgumentDecoder<'de>,
     {
         self.as_mut().watcher.called_stable_restore = true;
-        use candid::de::IDLDeserialize;
         let bytes = &self.stable;
-        let mut de = IDLDeserialize::new(bytes.as_slice()).map_err(|e| format!("{:?}", e))?;
-        let res = ArgumentDecoder::decode(&mut de).map_err(|e| format!("{:?}", e))?;
+
+        let mut de =
+            candid::de::IDLDeserialize::new(bytes.as_slice()).map_err(|e| format!("{:?}", e))?;
+        let res =
+            candid::utils::ArgumentDecoder::decode(&mut de).map_err(|e| format!("{:?}", e))?;
         // The idea here is to ignore an error that comes from Candid, because we have trailing
         // bytes.
         let _ = de.done();
@@ -657,19 +648,18 @@ impl Context for MockContext {
     #[inline]
     fn stable_write(&self, offset: u32, buf: &[u8]) {
         let stable = &mut self.as_mut().stable;
+        // todo(qti3e) improve this implementation using copy.
         for (i, &b) in buf.iter().enumerate() {
-            let index = (offset + i) as usize;
+            let index = (offset as usize) + i;
             stable[index] = b;
         }
     }
 
     #[inline]
-    fn stable_read(&self, offset: u32, buf: &mut [u8]) {
+    fn stable_read(&self, offset: u32, mut buf: &mut [u8]) {
         let stable = &mut self.as_mut().stable;
-        for (i, b) in buf.iter_mut().enumerate() {
-            let index = (offset + i) as usize;
-            *b = stable[index]
-        }
+        let slice = &stable[offset as usize..];
+        buf.write(slice).expect("Failed to write to buffer.");
     }
 }
 
