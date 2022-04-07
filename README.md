@@ -5,6 +5,8 @@
 This library provides an alternative to `ic-cdk` that can help developers write canisters
 and unit test them in their Rust code.
 
+Blog post: [IC Kit: Rust Canister Testing Kit we Used to Improve Code Coverage at Fleek](https://blog.fleek.co/posts/ickit-rust-canister-testing)
+
 ## Install
 
 Add this to your `Cargo.toml`
