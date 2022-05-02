@@ -367,6 +367,12 @@ impl MockContext {
         self.as_mut().caller = caller;
     }
 
+    /// Update the canister id the call happens from for the next message.
+    #[inline]
+    pub fn update_id(&self, canister_id: Principal) {
+        self.as_mut().id = canister_id;
+    }
+
     /// Return the certified data set on the canister.
     #[inline]
     pub fn get_certified_data(&self) -> Option<Vec<u8>> {
