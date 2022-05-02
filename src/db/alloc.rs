@@ -1,12 +1,12 @@
-use futures::executor::BlockingStream;
-use serde::{Deserialize, Serialize};
 use crate::ic::{stable_grow, StableWriter};
 use crate::StableMemoryError;
+use futures::executor::BlockingStream;
+use serde::{Deserialize, Serialize};
 
 /// A memory allocator that works with stable storage's space, there
 /// should only be one Allocator in a canister.
 pub struct Allocator {
-    blocks: BlockList
+    blocks: BlockList,
 }
 
 /// A compact list of block ranges.
@@ -15,7 +15,7 @@ struct BlockList {
     list: Vec<Block>,
 }
 
-#[derive(Debug, Copy, Clone, PartialOrd, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialOrd, PartialEq, Serialize, Deserialize)]
 pub struct Block {
     offset: usize,
     size: usize,
@@ -36,7 +36,9 @@ impl Allocator {
         self.alloc(size)
     }
 
-    pub fn free() {}
+    pub fn free(&mut self, block: Block) {
+        self.blocks.insert(block);
+    }
 }
 
 impl Block {
@@ -81,7 +83,7 @@ impl BlockList {
         let offset = block.offset;
         let end = offset + block.size;
         while self.list.len() > 0 {
-            let b = self.list[self.list.len() - 1];
+            let b = &self.list[self.list.len() - 1];
             let e = b.offset + b.size;
 
             if offset <= e {
@@ -95,7 +97,7 @@ impl BlockList {
         self.list.push(block);
 
         let index = self.list.len() - 1;
-        let block = self.list[index];
+        let block = &self.list[index];
         let offset = block.offset;
         let end = offset + block.size;
 
@@ -131,7 +133,7 @@ impl BlockList {
         }
 
         if let Some(index) = maybe_remove_index {
-            self.list.remove(index)
+            self.list.remove(index);
         }
 
         result
@@ -205,6 +207,16 @@ mod tests {
 
     #[test]
     fn block_list_allocate() {
-
+        let mut list = BlockList::default();
+        list.insert(Block::new(0, 3));
+        list.insert(Block::new(7, 2));
+        assert_eq!(list.allocate(2), Some(Block::new(0, 2)));
+        assert_eq!(list.list, vec![Block::new(2, 1), Block::new(7, 2)]);
+        assert_eq!(list.allocate(2), Some(Block::new(7, 2)));
+        assert_eq!(list.list, vec![Block::new(2, 1)]);
+        assert_eq!(list.allocate(2), None);
+        assert_eq!(list.list, vec![Block::new(2, 1)]);
+        assert_eq!(list.allocate(1), Some(Block::new(2, 1)));
+        assert_eq!(list.list, vec![]);
     }
 }
