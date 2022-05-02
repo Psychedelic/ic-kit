@@ -22,6 +22,8 @@ pub struct Block {
 }
 
 impl Allocator {
+    /// Allocate a block with the given size, returns an error if we have ran
+    /// out of memory, or a block with the given size could not be allocated.
     pub fn alloc(&mut self, size: usize) -> Result<Block, StableMemoryError> {
         if let Some(block) = self.blocks.allocate(size) {
             return Ok(block);
@@ -36,6 +38,7 @@ impl Allocator {
         self.alloc(size)
     }
 
+    /// Free a block so it can be reallocated in the program.
     pub fn free(&mut self, block: Block) {
         self.blocks.insert(block);
     }
