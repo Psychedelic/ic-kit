@@ -1,5 +1,5 @@
 use ic_kit::macros::*;
-use ic_kit::{ic, Principal, async_test};
+use ic_kit::{async_test, ic, Principal};
 
 #[update]
 fn whoami() -> Principal {
@@ -13,7 +13,7 @@ async fn send_cycles(canister_id: Principal, cycles: u64) -> Result<(), String> 
         .map_err(|(code, msg)| format!("Call failed with code={}: {}", code as u8, msg))
 }
 
-async fn async_job (canister_id: Principal, cycles: u64) {
+async fn async_job(canister_id: Principal, cycles: u64) {
     let _ = send_cycles(canister_id, cycles).await;
 }
 
