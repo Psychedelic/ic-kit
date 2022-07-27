@@ -2,17 +2,19 @@ use futures::executor::LocalPool;
 use std::any::{Any, TypeId};
 use std::collections::{BTreeMap, BTreeSet};
 use std::hash::Hasher;
+use std::io::Write;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use ic_cdk::export::candid::decode_args;
 use ic_cdk::export::candid::utils::{ArgumentDecoder, ArgumentEncoder};
-use ic_cdk::export::candid::{decode_args, encode_args};
 use ic_cdk::export::{candid, Principal};
 use serde::Serialize;
 
 use crate::candid::CandidType;
 use crate::inject::{get_context, inject};
 use crate::interface::{CallResponse, Context};
-use crate::{CallHandler, Method};
+use crate::stable::StableWriter;
+use crate::{CallHandler, Method, StableMemoryError};
 
 /// A context that could be used to fake/control the behaviour of the IC when testing the canister.
 pub struct MockContext {
@@ -126,8 +128,7 @@ impl MockContext {
     ///     .with_id(id.clone())
     ///     .inject();
     ///
-    /// let ic = get_context();
-    /// assert_eq!(ic.id(), id);
+    /// assert_eq!(ic::id(), id);
     /// ```
     #[inline]
     pub fn with_id(mut self, id: Principal) -> Self {
@@ -146,8 +147,7 @@ impl MockContext {
     ///     .with_balance(1000)
     ///     .inject();
     ///
-    /// let ic = get_context();
-    /// assert_eq!(ic.balance(), 1000);
+    /// assert_eq!(ic::balance(), 1000);
     /// ```
     #[inline]
     pub fn with_balance(mut self, cycles: u64) -> Self {
@@ -168,8 +168,7 @@ impl MockContext {
     ///     .with_caller(alice.clone())
     ///     .inject();
     ///
-    /// let ic = get_context();
-    /// assert_eq!(ic.caller(), alice);
+    /// assert_eq!(ic::caller(), alice);
     /// ```
     #[inline]
     pub fn with_caller(mut self, caller: Principal) -> Self {
@@ -190,10 +189,9 @@ impl MockContext {
     ///     .with_msg_cycles(1000)
     ///     .inject();
     ///
-    /// let ic = get_context();
-    /// assert_eq!(ic.msg_cycles_available(), 1000);
-    /// ic.msg_cycles_accept(300);
-    /// assert_eq!(ic.msg_cycles_available(), 700);
+    /// assert_eq!(ic::msg_cycles_available(), 1000);
+    /// ic::msg_cycles_accept(300);
+    /// assert_eq!(ic::msg_cycles_available(), 700);
     /// ```
     #[inline]
     pub fn with_msg_cycles(mut self, cycles: u64) -> Self {
@@ -212,8 +210,7 @@ impl MockContext {
     ///     .with_data(String::from("Hello"))
     ///     .inject();
     ///
-    /// let ic = get_context();
-    /// assert_eq!(ic.get::<String>(), &"Hello".to_string());
+    /// assert_eq!(ic::get::<String>(), &"Hello".to_string());
     /// ```
     #[inline]
     pub fn with_data<T: 'static>(mut self, data: T) -> Self {
@@ -233,8 +230,7 @@ impl MockContext {
     ///     .with_stable(("Bella".to_string(), ))
     ///     .inject();
     ///
-    /// let ic = get_context();
-    /// assert_eq!(ic.stable_restore::<(String, )>(), Ok(("Bella".to_string(), )));
+    /// assert_eq!(ic::stable_restore::<(String, )>(), Ok(("Bella".to_string(), )));
     /// ```
     #[inline]
     pub fn with_stable<T: Serialize>(self, data: T) -> Self
@@ -530,10 +526,8 @@ impl Context for MockContext {
     where
         T: ArgumentEncoder,
     {
-        let mut_ref = self.as_mut();
-        mut_ref.watcher.called_stable_store = true;
-        mut_ref.stable = encode_args(data)?;
-        Ok(())
+        self.as_mut().watcher.called_stable_store = true;
+        candid::write_args(&mut StableWriter::default(), data)
     }
 
     #[inline]
@@ -542,10 +536,12 @@ impl Context for MockContext {
         T: for<'de> ArgumentDecoder<'de>,
     {
         self.as_mut().watcher.called_stable_restore = true;
-        use candid::de::IDLDeserialize;
         let bytes = &self.stable;
-        let mut de = IDLDeserialize::new(bytes.as_slice()).map_err(|e| format!("{:?}", e))?;
-        let res = ArgumentDecoder::decode(&mut de).map_err(|e| format!("{:?}", e))?;
+
+        let mut de =
+            candid::de::IDLDeserialize::new(bytes.as_slice()).map_err(|e| format!("{:?}", e))?;
+        let res =
+            candid::utils::ArgumentDecoder::decode(&mut de).map_err(|e| format!("{:?}", e))?;
         // The idea here is to ignore an error that comes from Candid, because we have trailing
         // bytes.
         let _ = de.done();
@@ -622,8 +618,54 @@ impl Context for MockContext {
 
     #[inline]
     fn spawn<F: 'static + std::future::Future<Output = ()>>(&mut self, future: F) {
-        // TODO(qti3e) Setup the context in the thread.
+        // TODO(qti3e) Setup the context in the pool thread.
         self.pool.run_until(future)
+    }
+
+    #[inline]
+    fn stable_size(&self) -> u32 {
+        (self.stable.len() >> 16) as u32
+    }
+
+    #[inline]
+    fn stable_grow(&self, new_pages: u32) -> Result<u32, StableMemoryError> {
+        let old_pages = (self.stable.len() >> 16) as u32;
+
+        if old_pages > 65536 {
+            panic!("stable storage");
+        }
+
+        let pages = old_pages + new_pages;
+        if pages > 65536 {
+            return Err(StableMemoryError());
+        }
+
+        let new_size = (pages as usize) << 16;
+        let additional = new_size - self.stable.len();
+        let stable = &mut self.as_mut().stable;
+        stable.reserve(additional);
+        for _ in 0..additional {
+            stable.push(0);
+        }
+
+        Ok(old_pages)
+    }
+
+    #[inline]
+    fn stable_write(&self, offset: u32, buf: &[u8]) {
+        let stable = &mut self.as_mut().stable;
+        // todo(qti3e) improve this implementation using copy.
+        for (i, &b) in buf.iter().enumerate() {
+            let index = (offset as usize) + i;
+            stable[index] = b;
+        }
+    }
+
+    #[inline]
+    fn stable_read(&self, offset: u32, mut buf: &mut [u8]) {
+        let stable = &mut self.as_mut().stable;
+        let slice = &stable[offset as usize..];
+        buf.write(slice).expect("Failed to write to buffer.");
     }
 }
 

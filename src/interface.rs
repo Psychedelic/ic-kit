@@ -8,6 +8,9 @@ use ic_cdk::export::{candid, Principal};
 
 pub type CallResponse<T> = Pin<Box<dyn Future<Output = CallResult<T>>>>;
 
+/// A possible error value when dealing with stable memory.
+pub struct StableMemoryError();
+
 pub trait Context {
     /// Trap the code.
     fn trap(&self, message: &str) -> !;
@@ -113,4 +116,20 @@ pub trait Context {
 
     /// Execute a future without blocking the current call.
     fn spawn<F: 'static + std::future::Future<Output = ()>>(&mut self, future: F);
+
+    /// Returns the current size of the stable memory in WebAssembly pages.
+    /// (One WebAssembly page is 64KiB)
+    fn stable_size(&self) -> u32;
+
+    /// Tries to grow the memory by new_pages many pages containing zeroes.
+    /// This system call traps if the previous size of the memory exceeds 2^32 bytes.
+    /// Errors if the new size of the memory exceeds 2^32 bytes or growing is unsuccessful.
+    /// Otherwise, it grows the memory and returns the previous size of the memory in pages.
+    fn stable_grow(&self, new_pages: u32) -> Result<u32, StableMemoryError>;
+
+    /// Writes data to the stable memory location specified by an offset.
+    fn stable_write(&self, offset: u32, buf: &[u8]);
+
+    /// Reads data from the stable memory location specified by an offset.
+    fn stable_read(&self, offset: u32, buf: &mut [u8]);
 }
