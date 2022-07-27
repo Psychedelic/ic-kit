@@ -1,4 +1,4 @@
-// This file is copied from ic_cdk.
+// This file is copied from ic_cdk, but changed so that it works with IC-Kit.
 use crate::ic::{stable_grow, stable_read, stable_size, stable_write};
 use crate::StableMemoryError;
 use std::io;

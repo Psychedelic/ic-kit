@@ -2,7 +2,6 @@ pub use handler::*;
 pub use interface::*;
 pub use mock::*;
 
-mod db;
 mod handler;
 mod inject;
 mod interface;
