@@ -1,6 +1,6 @@
 [package]
 name = "ic-kit"
-version = "0.4.5"
+version = "0.4.6"
 description = "Testable Canister Developer Kit for the Internet Computer."
 authors = ["Parsa Ghadimi <parsa@fleek.co>"]
 edition = "2018"
