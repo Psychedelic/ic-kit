@@ -9,16 +9,9 @@ mod mock;
 #[cfg(target_family = "wasm")]
 mod wasm;
 
-/// async_std::test to be used for async tests when not targeting WASM.
-#[cfg(not(target_family = "wasm"))]
-pub use async_std::test as async_test;
-pub use ic_cdk::api::call::{CallResult, RejectionCode};
-pub use ic_cdk::export::candid;
-pub use ic_cdk::export::Principal;
-pub use ic_cdk_macros as macros;
-
 /// A set of mock principal IDs useful for testing.
 #[cfg(not(target_family = "wasm"))]
+#[deprecated(since = "0.4.7", note = "mock_principals is deprecated.")]
 pub mod mock_principals {
     use crate::Principal;
 
@@ -43,13 +36,6 @@ pub mod mock_principals {
     }
 }
 
-/// APIs/Methods to work with the Internet Computer.
-pub mod ic;
-/// The type definition of common canisters on the Internet Computer.
-pub mod interfaces;
-/// The APIs for StableReader/StableWriter.
-pub mod stable;
-
 /// Return the IC context depending on the build target.
 #[inline(always)]
 #[deprecated(note = "get_context is deprecated use ic_kit::ic::*")]
@@ -59,3 +45,18 @@ pub fn get_context() -> &'static impl Context {
     #[cfg(target_family = "wasm")]
     return wasm::IcContext::context();
 }
+
+/// APIs/Methods to work with the Internet Computer.
+pub mod ic;
+/// The type definition of common canisters on the Internet Computer.
+pub mod interfaces;
+/// The APIs for StableReader/StableWriter.
+pub mod stable;
+
+/// async_std::test to be used for async tests when not targeting WASM.
+#[cfg(not(target_family = "wasm"))]
+pub use async_std::test as async_test;
+pub use ic_cdk::api::call::{CallResult, RejectionCode};
+pub use ic_cdk::export::candid;
+pub use ic_cdk::export::Principal;
+pub use ic_cdk_macros as macros;
