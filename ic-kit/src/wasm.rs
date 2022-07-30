@@ -143,7 +143,7 @@ impl Context for IcContext {
         cycles: u64,
     ) -> CallResponse<Vec<u8>> {
         let method = method.into();
-        Box::pin(async move { ic_cdk::api::call::call_raw(id, &method, args_raw, cycles).await })
+        Box::pin(async move { ic_cdk::api::call::call_raw(id, &method, args_raw.as_slice(), cycles).await })
     }
 
     #[inline(always)]
