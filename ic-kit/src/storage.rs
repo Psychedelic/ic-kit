@@ -90,7 +90,7 @@ impl Storage {
 
     /// Remove the data associated with the type `T`, and returns it if any.
     #[inline]
-    pub fn remove<T: 'static>(&mut self) -> Option<T> {
+    pub fn take<T: 'static>(&mut self) -> Option<T> {
         let tid = TypeId::of::<T>();
         self.storage
             .remove(&tid)

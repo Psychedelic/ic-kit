@@ -130,7 +130,7 @@ pub trait Context {
     fn maybe_with_mut<T: 'static, U, F: FnOnce(&mut T) -> U>(&self, callback: F) -> Option<U>;
 
     /// Remove the data associated with the given type, and return it.
-    fn remove<T: 'static>(&self) -> Option<T>;
+    fn take<T: 'static>(&self) -> Option<T>;
 
     /// Replaced the stored value of type `T` with the new provided one and return the old one if
     /// any.

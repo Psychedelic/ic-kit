@@ -263,8 +263,8 @@ pub fn maybe_with_mut<T: 'static, U, F: FnOnce(&mut T) -> U>(callback: F) -> Opt
 }
 
 /// Remove the current value associated with the type and return it.
-pub fn remove<T: 'static>() -> Option<T> {
-    get_context().remove::<T>()
+pub fn take<T: 'static>() -> Option<T> {
+    get_context().take::<T>()
 }
 
 /// Swaps the value associated with type `T` with the given value, returns the old one.
@@ -319,7 +319,7 @@ pub fn get_mut<T: 'static + Default>() -> &'static mut T {
 #[inline(always)]
 #[deprecated(
     since = "0.4.8",
-    note = "Unsafe memory methods are deprecated, use the safer ic_kit::ic::remove method."
+    note = "Unsafe memory methods are deprecated, use the safer ic_kit::ic::take method."
 )]
 pub fn delete<T: 'static + Default>() -> bool {
     get_context().delete::<T>()

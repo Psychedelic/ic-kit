@@ -645,12 +645,12 @@ impl Context for MockContext {
     }
 
     #[inline]
-    fn remove<T: 'static>(&self) -> Option<T> {
+    fn take<T: 'static>(&self) -> Option<T> {
         self.as_mut()
             .watcher
             .storage_modified
             .insert(TypeId::of::<T>());
-        self.as_mut().storage.remove()
+        self.as_mut().storage.take()
     }
 
     #[inline]
@@ -696,7 +696,7 @@ impl Context for MockContext {
             .watcher
             .storage_modified
             .insert(TypeId::of::<T>());
-        self.as_mut().storage.remove::<T>().is_some()
+        self.as_mut().storage.take::<T>().is_some()
     }
 }
 

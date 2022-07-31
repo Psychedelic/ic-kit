@@ -171,8 +171,8 @@ impl Context for IcContext {
     }
 
     #[inline(always)]
-    fn remove<T: 'static>(&self) -> Option<T> {
-        self.as_mut().storage.remove()
+    fn take<T: 'static>(&self) -> Option<T> {
+        self.as_mut().storage.take()
     }
 
     #[inline(always)]
@@ -202,6 +202,6 @@ impl Context for IcContext {
 
     #[inline(always)]
     fn delete<T: 'static + Default>(&self) -> bool {
-        self.as_mut().storage.remove::<T>().is_some()
+        self.as_mut().storage.take::<T>().is_some()
     }
 }
