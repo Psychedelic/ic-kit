@@ -200,7 +200,7 @@ pub fn stable_bytes() -> Vec<u8> {
 ///
 /// impl Counter {
 ///     fn get(&self) -> u64 {
-///         self.count
+///         *self.count
 ///     }
 /// }
 ///
@@ -242,7 +242,7 @@ pub fn maybe_with<T: 'static, U, F: FnOnce(&T) -> U>(callback: F) -> Option<U> {
 /// impl Counter {
 ///     fn increment(&mut self) -> u64 {
 ///         self.count += 1;
-///         self.count
+///         *self.count
 ///     }
 /// }
 ///
