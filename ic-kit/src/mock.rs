@@ -661,43 +661,6 @@ impl Context for MockContext {
             .insert(TypeId::of::<T>());
         self.as_mut().storage.swap(value)
     }
-
-    #[inline]
-    fn store<T: 'static>(&self, data: T) {
-        self.as_mut()
-            .watcher
-            .storage_modified
-            .insert(TypeId::of::<T>());
-        self.as_mut().storage.swap(data);
-    }
-
-    #[inline]
-    fn get_maybe<T: 'static>(&self) -> Option<&T> {
-        self.as_mut().storage.get_maybe()
-    }
-
-    #[inline]
-    fn get<T: 'static + Default>(&self) -> &T {
-        self.as_mut().storage.get()
-    }
-
-    #[inline]
-    fn get_mut<T: 'static + Default>(&self) -> &mut T {
-        self.as_mut()
-            .watcher
-            .storage_modified
-            .insert(TypeId::of::<T>());
-        self.as_mut().storage.get_mut()
-    }
-
-    #[inline]
-    fn delete<T: 'static + Default>(&self) -> bool {
-        self.as_mut()
-            .watcher
-            .storage_modified
-            .insert(TypeId::of::<T>());
-        self.as_mut().storage.take::<T>().is_some()
-    }
 }
 
 impl Default for Watcher {

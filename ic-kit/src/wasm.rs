@@ -179,29 +179,4 @@ impl Context for IcContext {
     fn swap<T: 'static>(&self, value: T) -> Option<T> {
         self.as_mut().storage.swap(value)
     }
-
-    #[inline(always)]
-    fn store<T: 'static>(&self, data: T) {
-        self.as_mut().storage.swap(data);
-    }
-
-    #[inline(always)]
-    fn get_maybe<T: 'static>(&self) -> Option<&T> {
-        self.as_mut().storage.get_maybe()
-    }
-
-    #[inline(always)]
-    fn get<T: 'static + Default>(&self) -> &T {
-        self.as_mut().storage.get()
-    }
-
-    #[inline(always)]
-    fn get_mut<T: 'static + Default>(&self) -> &mut T {
-        self.as_mut().storage.get_mut()
-    }
-
-    #[inline(always)]
-    fn delete<T: 'static + Default>(&self) -> bool {
-        self.as_mut().storage.take::<T>().is_some()
-    }
 }

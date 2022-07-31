@@ -11,43 +11,6 @@ mod setup;
 #[cfg(target_family = "wasm")]
 mod wasm;
 
-/// A set of mock principal IDs useful for testing.
-#[cfg(not(target_family = "wasm"))]
-#[deprecated(since = "0.4.7", note = "mock_principals is deprecated.")]
-pub mod mock_principals {
-    use crate::Principal;
-
-    #[inline]
-    pub fn alice() -> Principal {
-        Principal::from_text("sgymv-uiaaa-aaaaa-aaaia-cai").unwrap()
-    }
-
-    #[inline]
-    pub fn bob() -> Principal {
-        Principal::from_text("ai7t5-aibaq-aaaaa-aaaaa-c").unwrap()
-    }
-
-    #[inline]
-    pub fn john() -> Principal {
-        Principal::from_text("hozae-racaq-aaaaa-aaaaa-c").unwrap()
-    }
-
-    #[inline]
-    pub fn xtc() -> Principal {
-        Principal::from_text("aanaa-xaaaa-aaaah-aaeiq-cai").unwrap()
-    }
-}
-
-/// Return the IC context depending on the build target.
-#[inline(always)]
-#[deprecated(note = "get_context is deprecated use ic_kit::ic::*")]
-pub fn get_context() -> &'static impl Context {
-    #[cfg(not(target_family = "wasm"))]
-    return inject::get_context();
-    #[cfg(target_family = "wasm")]
-    return wasm::IcContext::context();
-}
-
 /// APIs/Methods to work with the Internet Computer.
 pub mod ic;
 /// The type definition of common canisters on the Internet Computer.

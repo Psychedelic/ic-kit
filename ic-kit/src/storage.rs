@@ -10,34 +10,6 @@ pub struct Storage {
 }
 
 impl Storage {
-    #[inline]
-    pub(crate) fn get<T: 'static + Default>(&mut self) -> &T {
-        let tid = TypeId::of::<T>();
-        self.storage
-            .entry(tid)
-            .or_insert_with(|| Box::new(T::default()))
-            .downcast_ref::<T>()
-            .unwrap()
-    }
-
-    #[inline]
-    pub(crate) fn get_mut<T: 'static + Default>(&mut self) -> &mut T {
-        let tid = TypeId::of::<T>();
-        self.storage
-            .entry(tid)
-            .or_insert_with(|| Box::new(T::default()))
-            .downcast_mut::<T>()
-            .unwrap()
-    }
-
-    #[inline]
-    pub(crate) fn get_maybe<T: 'static>(&mut self) -> Option<&T> {
-        let tid = TypeId::of::<T>();
-        self.storage
-            .get(&tid)
-            .map(|c| c.downcast_ref::<T>().unwrap())
-    }
-
     /// Pass an immutable reference to the stored data of the type `T` to the closure,
     /// if there is no data associated with the type, store the `Default` and then perform the
     /// operation.

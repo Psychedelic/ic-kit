@@ -135,24 +135,4 @@ pub trait Context {
     /// Replaced the stored value of type `T` with the new provided one and return the old one if
     /// any.
     fn swap<T: 'static>(&self, value: T) -> Option<T>;
-
-    /// See [ic::store](crate::ic::store)
-    #[deprecated]
-    fn store<T: 'static>(&self, data: T);
-
-    /// See [ic::store](crate::ic::get_maybe)
-    #[deprecated]
-    fn get_maybe<T: 'static>(&self) -> Option<&T>;
-
-    /// See [ic::store](crate::ic::get)
-    #[deprecated]
-    fn get<T: 'static + Default>(&self) -> &T;
-
-    /// See [ic::store](crate::ic::get_mut)
-    #[deprecated]
-    fn get_mut<T: 'static + Default>(&self) -> &mut T;
-
-    /// See [ic::store](crate::ic::delete)
-    #[deprecated]
-    fn delete<T: 'static + Default>(&self) -> bool;
 }
