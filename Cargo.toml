@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "ic-kit",
+    "ic-kit-sys",
 ]
 
 [profile.release]

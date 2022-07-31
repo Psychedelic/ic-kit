@@ -1,0 +1,16 @@
+[package]
+name = "ic-kit-sys"
+version = "0.1.0"
+edition = "2021"
+authors = ["Parsa Ghadimi <i@parsa.ooo>"]
+description = "IC-Kit's API bindings to the Internet Computer's WASM runtime."
+license = "GPL-3.0"
+repository = "https://github.com/Psychedelic/ic-kit"
+documentation = "https://docs.rs/ic-kit-sys"
+categories = ["api-bindings", "development-tools::testing"]
+keywords = ["internet-computer", "canister", "cdk", "fleek"]
+include = ["src", "Cargo.toml", "README.md"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
