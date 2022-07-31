@@ -2,7 +2,7 @@
 name = "ic-kit"
 version = "0.4.8"
 description = "Testable Canister Developer Kit for the Internet Computer."
-authors = ["Parsa Ghadimi <parsa@fleek.co>"]
+authors = ["Parsa Ghadimi <parsa@fleek.co>", "Ossian Mapes <oz@fleek.co>"]
 edition = "2018"
 license = "Apache-2.0"
 repository = "https://github.com/Psychedelic/ic-kit"
