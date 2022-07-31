@@ -1,10 +1,8 @@
-use std::any::{Any, TypeId};
-use std::collections::BTreeMap;
-
 use ic_cdk;
 use ic_cdk::export::candid::utils::{ArgumentDecoder, ArgumentEncoder};
 use ic_cdk::export::{candid, Principal};
 
+use crate::storage::Storage;
 use crate::{CallResponse, Context, StableMemoryError};
 
 static mut CONTEXT: Option<IcContext> = None;
@@ -12,7 +10,7 @@ static mut CONTEXT: Option<IcContext> = None;
 /// A singleton context that is used in the actual IC environment.
 pub struct IcContext {
     /// The storage for this context.
-    storage: BTreeMap<TypeId, Box<dyn Any>>,
+    storage: Storage,
 }
 
 impl IcContext {
@@ -24,7 +22,7 @@ impl IcContext {
                 ctx
             } else {
                 CONTEXT = Some(IcContext {
-                    storage: BTreeMap::new(),
+                    storage: Storage::default(),
                 });
                 IcContext::context()
             }
@@ -48,7 +46,7 @@ impl Context for IcContext {
     }
 
     #[inline(always)]
-    fn print<S: std::convert::AsRef<str>>(&self, s: S) {
+    fn print<S: AsRef<str>>(&self, s: S) {
         ic_cdk::api::print(s)
     }
 
@@ -88,37 +86,6 @@ impl Context for IcContext {
     }
 
     #[inline(always)]
-    fn store<T: 'static>(&self, data: T) {
-        let type_id = TypeId::of::<T>();
-        self.as_mut().storage.insert(type_id, Box::new(data));
-    }
-
-    #[inline]
-    fn get_maybe<T: 'static>(&self) -> Option<&T> {
-        let type_id = std::any::TypeId::of::<T>();
-        self.storage
-            .get(&type_id)
-            .map(|b| b.downcast_ref().expect("Unexpected value of invalid type."))
-    }
-
-    #[inline(always)]
-    fn get_mut<T: 'static + Default>(&self) -> &mut T {
-        let type_id = std::any::TypeId::of::<T>();
-        self.as_mut()
-            .storage
-            .entry(type_id)
-            .or_insert_with(|| Box::new(T::default()))
-            .downcast_mut()
-            .expect("Unexpected value of invalid type.")
-    }
-
-    #[inline(always)]
-    fn delete<T: 'static + Default>(&self) -> bool {
-        let type_id = std::any::TypeId::of::<T>();
-        self.as_mut().storage.remove(&type_id).is_some()
-    }
-
-    #[inline(always)]
     fn stable_store<T>(&self, data: T) -> Result<(), candid::Error>
     where
         T: ArgumentEncoder,
@@ -143,7 +110,9 @@ impl Context for IcContext {
         cycles: u64,
     ) -> CallResponse<Vec<u8>> {
         let method = method.into();
-        Box::pin(async move { ic_cdk::api::call::call_raw(id, &method, args_raw.as_slice(), cycles).await })
+        Box::pin(async move {
+            ic_cdk::api::call::call_raw(id, &method, args_raw.as_slice(), cycles).await
+        })
     }
 
     #[inline(always)]
@@ -179,5 +148,60 @@ impl Context for IcContext {
     #[inline(always)]
     fn stable_read(&self, offset: u32, buf: &mut [u8]) {
         ic_cdk::api::stable::stable_read(offset, buf)
+    }
+
+    #[inline(always)]
+    fn with<T: 'static + Default, U, F: FnOnce(&T) -> U>(&self, callback: F) -> U {
+        self.as_mut().storage.with(callback)
+    }
+
+    #[inline(always)]
+    fn maybe_with<T: 'static, U, F: FnOnce(&T) -> U>(&self, callback: F) -> Option<U> {
+        self.as_mut().storage.maybe_with(callback)
+    }
+
+    #[inline(always)]
+    fn with_mut<T: 'static + Default, U, F: FnOnce(&mut T) -> U>(&self, callback: F) -> U {
+        self.as_mut().storage.with_mut(callback)
+    }
+
+    #[inline(always)]
+    fn maybe_with_mut<T: 'static, U, F: FnOnce(&mut T) -> U>(&self, callback: F) -> Option<U> {
+        self.as_mut().storage.maybe_with_mut(callback)
+    }
+
+    #[inline(always)]
+    fn remove<T: 'static>(&self) -> Option<T> {
+        self.as_mut().storage.remove()
+    }
+
+    #[inline(always)]
+    fn swap<T: 'static>(&self, value: T) -> Option<T> {
+        self.as_mut().storage.swap(value)
+    }
+
+    #[inline(always)]
+    fn store<T: 'static>(&self, data: T) {
+        self.as_mut().storage.swap(data);
+    }
+
+    #[inline(always)]
+    fn get_maybe<T: 'static>(&self) -> Option<&T> {
+        self.as_mut().storage.get_maybe()
+    }
+
+    #[inline(always)]
+    fn get<T: 'static + Default>(&self) -> &T {
+        self.as_mut().storage.get()
+    }
+
+    #[inline(always)]
+    fn get_mut<T: 'static + Default>(&self) -> &mut T {
+        self.as_mut().storage.get_mut()
+    }
+
+    #[inline(always)]
+    fn delete<T: 'static + Default>(&self) -> bool {
+        self.as_mut().storage.remove::<T>().is_some()
     }
 }

@@ -18,7 +18,7 @@ pub fn trap(message: &str) -> ! {
 
 /// Print a message.
 #[inline(always)]
-pub fn print<S: std::convert::AsRef<str>>(s: S) {
+pub fn print<S: AsRef<str>>(s: S) {
     get_context().print(s)
 }
 
@@ -63,39 +63,6 @@ pub fn msg_cycles_accept(amount: u64) -> u64 {
 #[inline(always)]
 pub fn msg_cycles_refunded() -> u64 {
     get_context().msg_cycles_refunded()
-}
-
-/// Store the given data to the storage.
-#[inline(always)]
-pub fn store<T: 'static>(data: T) {
-    get_context().store(data)
-}
-
-/// Return the data that does not implement [`Default`].
-#[inline(always)]
-pub fn get_maybe<T: 'static>() -> Option<&'static T> {
-    get_context().get_maybe()
-}
-
-/// Return the data associated with the given type. If the data is not present the default
-/// value of the type is returned.
-#[inline(always)]
-pub fn get<T: 'static + Default>() -> &'static T {
-    get_context().get_mut()
-}
-
-/// Return a mutable reference to the given data type, if the data is not present the default
-/// value of the type is constructed and stored. The changes made to the data during updates
-/// is preserved.
-#[inline(always)]
-pub fn get_mut<T: 'static + Default>() -> &'static mut T {
-    get_context().get_mut()
-}
-
-/// Remove the data associated with the given data type.
-#[inline(always)]
-pub fn delete<T: 'static + Default>() -> bool {
-    get_context().delete::<T>()
 }
 
 /// Store the given data to the stable storage.
@@ -196,7 +163,10 @@ pub fn stable_read(offset: u32, buf: &mut [u8]) {
 
 /// Returns a copy of the stable memory.
 ///
-/// This will map the whole memory (even if not all of it has been written to).
+/// This will map the whole memory (even if not all of it has been written to), we don't recommend
+/// using such a method as this is an expensive read of the entire stable storage to the heap.
+///
+/// Only use it with caution.
 pub fn stable_bytes() -> Vec<u8> {
     let size = (stable_size() as usize) << 16;
     let mut vec = Vec::with_capacity(size);
@@ -207,4 +177,150 @@ pub fn stable_bytes() -> Vec<u8> {
     stable_read(0, vec.as_mut_slice());
 
     vec
+}
+
+/// Pass an immutable reference to the value associated with the given type to the closure.
+///
+/// If no value is currently associated to the type `T`, this method will insert the default
+/// value in its place before invoking the callback. Use `maybe_with` if you don't want the
+/// default value to be inserted or if your type does not implement the [`Default`] trait.
+///
+/// This is a safe replacement for the previously known `ic_kit::ic::get` API, and you can use it
+/// instead of `lazy_static` or `local_thread`.
+///
+/// # Example
+///
+/// ```
+/// use ic_kit::*;
+///
+/// #[derive(Default)]
+/// struct Counter {
+///     count: u64
+/// }
+///
+/// impl Counter {
+///     fn get(&self) -> u64 {
+///         self.count
+///     }
+/// }
+///
+/// MockContext::new()
+///     .with_data(Counter { count: 17 })
+///     .inject();
+///
+/// assert_eq!(ic::with(Counter::get), 17);
+/// ```
+pub fn with<T: 'static + Default, U, F: FnOnce(&T) -> U>(callback: F) -> U {
+    get_context().with(callback)
+}
+
+/// Like [`with`], but does not initialize the data with the default value and simply returns None,
+/// if there is no value associated with the type.
+pub fn maybe_with<T: 'static, U, F: FnOnce(&T) -> U>(callback: F) -> Option<U> {
+    get_context().maybe_with(callback)
+}
+
+/// Pass a mutable reference to the value associated with the given type to the closure.
+///
+/// If no value is currently associated to the type `T`, this method will insert the default
+/// value in its place before invoking the callback. Use `maybe_with_mut` if you don't want the
+/// default value to be inserted or if your type does not implement the [`Default`] trait.
+///
+/// This is a safe replacement for the previously known `ic_kit::ic::get` API, and you can use it
+/// instead of `lazy_static` or `local_thread`.
+///
+/// # Example
+///
+/// ```
+/// use ic_kit::*;
+///
+/// #[derive(Default)]
+/// struct Counter {
+///     count: u64
+/// }
+///
+/// impl Counter {
+///     fn increment(&mut self) -> u64 {
+///         self.count += 1;
+///         self.count
+///     }
+/// }
+///
+/// MockContext::new()
+///     .with_data(Counter { count: 17 })
+///     .inject();
+///
+/// assert_eq!(ic::with_mut(Counter::increment), 18);
+/// ```
+pub fn with_mut<T: 'static + Default, U, F: FnOnce(&mut T) -> U>(callback: F) -> U {
+    get_context().with_mut(callback)
+}
+
+/// Like [`with_mut`], but does not initialize the data with the default value and simply returns
+/// None, if there is no value associated with the type.
+pub fn maybe_with_mut<T: 'static, U, F: FnOnce(&mut T) -> U>(callback: F) -> Option<U> {
+    get_context().maybe_with_mut(callback)
+}
+
+/// Remove the current value associated with the type and return it.
+pub fn remove<T: 'static>() -> Option<T> {
+    get_context().remove::<T>()
+}
+
+/// Swaps the value associated with type `T` with the given value, returns the old one.
+pub fn swap<T: 'static>(value: T) -> Option<T> {
+    get_context().swap(value)
+}
+
+/// Store the given data to the storage.
+#[inline(always)]
+#[deprecated(
+    since = "0.4.8",
+    note = "Unsafe memory methods are deprecated, use the safer ic_kit::ic::swap method."
+)]
+pub fn store<T: 'static>(data: T) {
+    get_context().store(data)
+}
+
+/// Return the data that does not implement [`Default`].
+#[inline(always)]
+#[deprecated(
+    since = "0.4.8",
+    note = "Unsafe memory methods are deprecated, use the safer ic_kit::ic::maybe_with method."
+)]
+pub fn get_maybe<T: 'static>() -> Option<&'static T> {
+    get_context().get_maybe()
+}
+
+/// Return the data associated with the given type. If the data is not present the default
+/// value of the type is returned.
+#[inline(always)]
+#[deprecated(
+    since = "0.4.8",
+    note = "Unsafe memory methods are deprecated, use the safer ic_kit::ic::with method."
+)]
+pub fn get<T: 'static + Default>() -> &'static T {
+    get_context().get_mut()
+}
+
+/// Return a mutable reference to the given data type, if the data is not present the default
+/// value of the type is constructed and stored. The changes made to the data during updates
+/// is preserved.
+#[inline(always)]
+#[deprecated(
+    since = "0.4.8",
+    note = "Unsafe memory methods are deprecated, use the safer ic_kit::ic::with method."
+)]
+pub fn get_mut<T: 'static + Default>() -> &'static mut T {
+    get_context().get_mut()
+}
+
+/// Remove the data associated with the given data type.
+#[inline(always)]
+#[deprecated(
+    since = "0.4.8",
+    note = "Unsafe memory methods are deprecated, use the safer ic_kit::ic::remove method."
+)]
+pub fn delete<T: 'static + Default>() -> bool {
+    get_context().delete::<T>()
 }

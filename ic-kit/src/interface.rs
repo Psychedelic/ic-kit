@@ -9,6 +9,7 @@ use ic_cdk::export::{candid, Principal};
 pub type CallResponse<T> = Pin<Box<dyn Future<Output = CallResult<T>>>>;
 
 /// A possible error value when dealing with stable memory.
+#[derive(Debug)]
 pub struct StableMemoryError();
 
 pub trait Context {
@@ -16,7 +17,7 @@ pub trait Context {
     fn trap(&self, message: &str) -> !;
 
     /// Print a message.
-    fn print<S: std::convert::AsRef<str>>(&self, s: S);
+    fn print<S: AsRef<str>>(&self, s: S);
 
     /// ID of the current canister.
     fn id(&self) -> Principal;
@@ -39,27 +40,6 @@ pub trait Context {
     /// Return the cycles that were sent back by the canister that was just called.
     /// This method should only be called right after an inter-canister call.
     fn msg_cycles_refunded(&self) -> u64;
-
-    /// Store the given data to the storage.
-    fn store<T: 'static>(&self, data: T);
-
-    /// Return the data that does not implement [`Default`].
-    fn get_maybe<T: 'static>(&self) -> Option<&T>;
-
-    /// Return the data associated with the given type. If the data is not present the default
-    /// value of the type is returned.
-    #[inline]
-    fn get<T: 'static + Default>(&self) -> &T {
-        self.get_mut()
-    }
-
-    /// Return a mutable reference to the given data type, if the data is not present the default
-    /// value of the type is constructed and stored. The changes made to the data during updates
-    /// is preserved.
-    fn get_mut<T: 'static + Default>(&self) -> &mut T;
-
-    /// Remove the data associated with the given data type.
-    fn delete<T: 'static + Default>(&self) -> bool;
 
     /// Store the given data to the stable storage.
     fn stable_store<T>(&self, data: T) -> Result<(), candid::Error>
@@ -132,4 +112,31 @@ pub trait Context {
 
     /// Reads data from the stable memory location specified by an offset.
     fn stable_read(&self, offset: u32, buf: &mut [u8]);
+
+    fn with<T: 'static + Default, U, F: FnOnce(&T) -> U>(&self, callback: F) -> U;
+
+    fn maybe_with<T: 'static, U, F: FnOnce(&T) -> U>(&self, callback: F) -> Option<U>;
+
+    fn with_mut<T: 'static + Default, U, F: FnOnce(&mut T) -> U>(&self, callback: F) -> U;
+
+    fn maybe_with_mut<T: 'static, U, F: FnOnce(&mut T) -> U>(&self, callback: F) -> Option<U>;
+
+    fn remove<T: 'static>(&self) -> Option<T>;
+
+    fn swap<T: 'static>(&self, value: T) -> Option<T>;
+
+    #[deprecated]
+    fn store<T: 'static>(&self, data: T);
+
+    #[deprecated]
+    fn get_maybe<T: 'static>(&self) -> Option<&T>;
+
+    #[deprecated]
+    fn get<T: 'static + Default>(&self) -> &T;
+
+    #[deprecated]
+    fn get_mut<T: 'static + Default>(&self) -> &mut T;
+
+    #[deprecated]
+    fn delete<T: 'static + Default>(&self) -> bool;
 }

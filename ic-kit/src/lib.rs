@@ -52,6 +52,8 @@ pub mod ic;
 pub mod interfaces;
 /// The APIs for StableReader/StableWriter.
 pub mod stable;
+/// Internal storage abstraction for singletons.
+pub mod storage;
 
 /// async_std::test to be used for async tests when not targeting WASM.
 #[cfg(not(target_family = "wasm"))]
