@@ -161,7 +161,7 @@ impl Canister {
     /// different canister id.
     #[inline]
     pub fn new(id: Principal) -> Self {
-        let context = MockContext::new().with_id(id.clone());
+        let context = MockContext::new().with_id(id);
 
         Canister {
             id,
@@ -328,9 +328,9 @@ impl CallHandler for RawHandler {
         ctx: Option<&mut MockContext>,
     ) -> (CallResult<Vec<u8>>, u64) {
         let mut default_ctx = MockContext::new()
-            .with_caller(caller.clone())
+            .with_caller(*caller)
             .with_msg_cycles(cycles)
-            .with_id(canister_id.clone());
+            .with_id(*canister_id);
         let ctx = ctx.unwrap_or(&mut default_ctx);
 
         let handler = &self.handler;
@@ -367,7 +367,7 @@ impl CallHandler for Canister {
         assert!(ctx.is_none());
 
         let mut ctx = self.context.borrow_mut();
-        ctx.update_caller(caller.clone());
+        ctx.update_caller(*caller);
         ctx.update_msg_cycles(cycles);
 
         let res = if let Some(handler) = self.methods.get(method) {

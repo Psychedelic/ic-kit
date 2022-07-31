@@ -1,6 +1,6 @@
 use futures::executor::LocalPool;
-use std::any::{Any, TypeId};
-use std::collections::{BTreeMap, BTreeSet};
+use std::any::TypeId;
+use std::collections::BTreeSet;
 use std::hash::Hasher;
 use std::io::Write;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -14,6 +14,7 @@ use crate::candid::CandidType;
 use crate::inject::{get_context, inject};
 use crate::interface::{CallResponse, Context};
 use crate::stable::StableWriter;
+use crate::storage::Storage;
 use crate::{CallHandler, Method, StableMemoryError};
 
 /// A context that could be used to fake/control the behaviour of the IC when testing the canister.
@@ -35,7 +36,7 @@ pub struct MockContext {
     /// Cycles refunded by the previous call.
     cycles_refunded: u64,
     /// The storage tree for the current context.
-    storage: BTreeMap<TypeId, Box<dyn Any>>,
+    storage: Storage,
     /// The stable storage data.
     stable: Vec<u8>,
     /// The certified data.
@@ -74,7 +75,7 @@ pub struct Watcher {
     pub called_data_certificate: bool,
     /// Storage items that were mutated.
     storage_modified: BTreeSet<TypeId>,
-    /// List of all the inter canister calls that took place.
+    /// List of all the inter-canister calls that took place.
     calls: Vec<WatcherCall>,
 }
 
@@ -99,7 +100,7 @@ impl MockContext {
             trapped: false,
             cycles: 0,
             cycles_refunded: 0,
-            storage: BTreeMap::new(),
+            storage: Storage::default(),
             stable: Vec::new(),
             certified_data: None,
             certificate: None,
@@ -214,8 +215,7 @@ impl MockContext {
     /// ```
     #[inline]
     pub fn with_data<T: 'static>(mut self, data: T) -> Self {
-        let type_id = std::any::TypeId::of::<T>();
-        self.storage.insert(type_id, Box::new(data));
+        self.storage.swap(data);
         self
     }
 
@@ -233,12 +233,14 @@ impl MockContext {
     /// assert_eq!(ic::stable_restore::<(String, )>(), Ok(("Bella".to_string(), )));
     /// ```
     #[inline]
-    pub fn with_stable<T: Serialize>(self, data: T) -> Self
+    pub fn with_stable<T: Serialize>(mut self, data: T) -> Self
     where
         T: ArgumentEncoder,
     {
-        self.stable_store(data)
-            .expect("Encoding stable data failed.");
+        self.stable.truncate(0);
+        candid::write_args(&mut self.stable, data).expect("Encoding stable data failed.");
+        self.stable_grow(0)
+            .expect("Can not write this amount of data to stable storage.");
         self
     }
 
@@ -342,7 +344,7 @@ impl MockContext {
     /// Clear the storage.
     #[inline]
     pub fn clear_storage(&self) {
-        self.as_mut().storage.clear()
+        self.as_mut().storage = Storage::default()
     }
 
     /// Update the balance of the canister.
@@ -372,10 +374,7 @@ impl MockContext {
     /// Return the certified data set on the canister.
     #[inline]
     pub fn get_certified_data(&self) -> Option<Vec<u8>> {
-        match &self.certified_data {
-            Some(v) => Some(v.clone()),
-            None => None,
-        }
+        self.certified_data.as_ref().cloned()
     }
 
     /// Add the given handler to the call handlers pipeline.
@@ -412,7 +411,7 @@ impl Context for MockContext {
     #[inline]
     fn id(&self) -> Principal {
         self.as_mut().watcher.called_id = true;
-        self.id.clone()
+        self.id
     }
 
     #[inline]
@@ -442,7 +441,7 @@ impl Context for MockContext {
             )
         }
 
-        self.caller.clone()
+        self.caller
     }
 
     #[inline]
@@ -471,54 +470,6 @@ impl Context for MockContext {
     fn msg_cycles_refunded(&self) -> u64 {
         self.as_mut().watcher.called_msg_cycles_refunded = true;
         self.cycles_refunded
-    }
-
-    #[inline]
-    fn store<T: 'static>(&self, data: T) {
-        let type_id = TypeId::of::<T>();
-        let mut_ref = self.as_mut();
-        mut_ref.watcher.storage_modified.insert(type_id);
-        mut_ref.storage.insert(type_id, Box::new(data));
-    }
-
-    #[inline]
-    fn get_maybe<T: 'static>(&self) -> Option<&T> {
-        let type_id = std::any::TypeId::of::<T>();
-        self.storage
-            .get(&type_id)
-            .map(|b| b.downcast_ref().expect("Unexpected value of invalid type."))
-    }
-
-    #[inline]
-    fn get<T: 'static + Default>(&self) -> &T {
-        let type_id = std::any::TypeId::of::<T>();
-        self.as_mut()
-            .storage
-            .entry(type_id)
-            .or_insert_with(|| Box::new(T::default()))
-            .downcast_mut()
-            .expect("Unexpected value of invalid type.")
-    }
-
-    #[inline]
-    fn get_mut<T: 'static + Default>(&self) -> &mut T {
-        let type_id = std::any::TypeId::of::<T>();
-        let mut_ref = self.as_mut();
-        mut_ref.watcher.storage_modified.insert(type_id);
-        mut_ref
-            .storage
-            .entry(type_id)
-            .or_insert_with(|| Box::new(T::default()))
-            .downcast_mut()
-            .expect("Unexpected value of invalid type.")
-    }
-
-    #[inline]
-    fn delete<T: 'static + Default>(&self) -> bool {
-        let type_id = std::any::TypeId::of::<T>();
-        let mut_ref = self.as_mut();
-        mut_ref.watcher.storage_modified.insert(type_id);
-        mut_ref.storage.remove(&type_id).is_some()
     }
 
     #[inline]
@@ -586,7 +537,7 @@ impl Context for MockContext {
 
         mut_ref.watcher.record_call(WatcherCall {
             canister_id: id,
-            method_name: method.to_string(),
+            method_name: method,
             args_raw,
             cycles_sent: cycles,
             cycles_refunded: refunded,
@@ -610,10 +561,7 @@ impl Context for MockContext {
     #[inline]
     fn data_certificate(&self) -> Option<Vec<u8>> {
         self.as_mut().watcher.called_data_certificate = true;
-        match &self.certificate {
-            Some(c) => Some(c.clone()),
-            None => None,
-        }
+        self.certificate.as_ref().cloned()
     }
 
     #[inline]
@@ -629,7 +577,7 @@ impl Context for MockContext {
 
     #[inline]
     fn stable_grow(&self, new_pages: u32) -> Result<u32, StableMemoryError> {
-        let old_pages = (self.stable.len() >> 16) as u32;
+        let old_pages = (self.stable.len() >> 16) as u32 + 1;
 
         if old_pages > 65536 {
             panic!("stable storage");
@@ -666,6 +614,89 @@ impl Context for MockContext {
         let stable = &mut self.as_mut().stable;
         let slice = &stable[offset as usize..];
         buf.write(slice).expect("Failed to write to buffer.");
+    }
+
+    #[inline]
+    fn with<T: 'static + Default, U, F: FnOnce(&T) -> U>(&self, callback: F) -> U {
+        self.as_mut().storage.with(callback)
+    }
+
+    #[inline]
+    fn maybe_with<T: 'static, U, F: FnOnce(&T) -> U>(&self, callback: F) -> Option<U> {
+        self.as_mut().storage.maybe_with(callback)
+    }
+
+    #[inline]
+    fn with_mut<T: 'static + Default, U, F: FnOnce(&mut T) -> U>(&self, callback: F) -> U {
+        self.as_mut()
+            .watcher
+            .storage_modified
+            .insert(TypeId::of::<T>());
+        self.as_mut().storage.with_mut(callback)
+    }
+
+    #[inline]
+    fn maybe_with_mut<T: 'static, U, F: FnOnce(&mut T) -> U>(&self, callback: F) -> Option<U> {
+        self.as_mut()
+            .watcher
+            .storage_modified
+            .insert(TypeId::of::<T>());
+        self.as_mut().storage.maybe_with_mut(callback)
+    }
+
+    #[inline]
+    fn take<T: 'static>(&self) -> Option<T> {
+        self.as_mut()
+            .watcher
+            .storage_modified
+            .insert(TypeId::of::<T>());
+        self.as_mut().storage.take()
+    }
+
+    #[inline]
+    fn swap<T: 'static>(&self, value: T) -> Option<T> {
+        self.as_mut()
+            .watcher
+            .storage_modified
+            .insert(TypeId::of::<T>());
+        self.as_mut().storage.swap(value)
+    }
+
+    #[inline]
+    fn store<T: 'static>(&self, data: T) {
+        self.as_mut()
+            .watcher
+            .storage_modified
+            .insert(TypeId::of::<T>());
+        self.as_mut().storage.swap(data);
+    }
+
+    #[inline]
+    fn get_maybe<T: 'static>(&self) -> Option<&T> {
+        self.as_mut().storage.get_maybe()
+    }
+
+    #[inline]
+    fn get<T: 'static + Default>(&self) -> &T {
+        self.as_mut().storage.get()
+    }
+
+    #[inline]
+    fn get_mut<T: 'static + Default>(&self) -> &mut T {
+        self.as_mut()
+            .watcher
+            .storage_modified
+            .insert(TypeId::of::<T>());
+        self.as_mut().storage.get_mut()
+    }
+
+    #[inline]
+    fn delete<T: 'static + Default>(&self) -> bool {
+        self.as_mut()
+            .watcher
+            .storage_modified
+            .insert(TypeId::of::<T>());
+        self.as_mut().storage.take::<T>().is_some()
     }
 }
 
@@ -819,7 +850,7 @@ impl WatcherCall {
     /// Canister ID that was target of the call.
     #[inline]
     pub fn canister_id(&self) -> Principal {
-        self.canister_id.clone()
+        self.canister_id
     }
 }
 
@@ -883,7 +914,7 @@ mod tests {
             let user_balance = ic::get_mut::<u64>();
 
             if amount > *user_balance {
-                return Err(format!("Insufficient balance."));
+                return Err("Insufficient balance.".to_string());
             }
 
             *user_balance -= amount;
@@ -1081,10 +1112,7 @@ mod tests {
         assert!(watcher.called_stable_restore);
 
         let counter = ctx.get::<canister::Counter>();
-        let data: Vec<(u64, i64)> = counter
-            .iter()
-            .map(|(k, v)| (k.clone(), v.clone()))
-            .collect();
+        let data: Vec<(u64, i64)> = counter.iter().map(|(k, v)| (*k, *v)).collect();
         assert_eq!(data, vec![(0, 2), (1, 27), (2, 5), (3, 17)]);
 
         assert_eq!(canister::increment(0), 3);
