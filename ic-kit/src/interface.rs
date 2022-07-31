@@ -113,30 +113,46 @@ pub trait Context {
     /// Reads data from the stable memory location specified by an offset.
     fn stable_read(&self, offset: u32, buf: &mut [u8]);
 
+    /// Pass an immutable reference of data with type `T` to the callback, stores the default value
+    /// if not present, and return the transformation.
     fn with<T: 'static + Default, U, F: FnOnce(&T) -> U>(&self, callback: F) -> U;
 
+    /// Pass an immutable reference of data with type `T` to the callback, and return the mapped
+    /// value.
     fn maybe_with<T: 'static, U, F: FnOnce(&T) -> U>(&self, callback: F) -> Option<U>;
 
+    /// Pass the mutable reference of data with type `T` to the callback, stores the default value
+    /// if not present, and return the transformation.
     fn with_mut<T: 'static + Default, U, F: FnOnce(&mut T) -> U>(&self, callback: F) -> U;
 
+    /// Pass the mutable reference of data with type `T` to the callback, and return the callback's
+    /// result.
     fn maybe_with_mut<T: 'static, U, F: FnOnce(&mut T) -> U>(&self, callback: F) -> Option<U>;
 
+    /// Remove the data associated with the given type, and return it.
     fn remove<T: 'static>(&self) -> Option<T>;
 
+    /// Replaced the stored value of type `T` with the new provided one and return the old one if
+    /// any.
     fn swap<T: 'static>(&self, value: T) -> Option<T>;
 
+    /// See [ic::store](crate::ic::store)
     #[deprecated]
     fn store<T: 'static>(&self, data: T);
 
+    /// See [ic::store](crate::ic::get_maybe)
     #[deprecated]
     fn get_maybe<T: 'static>(&self) -> Option<&T>;
 
+    /// See [ic::store](crate::ic::get)
     #[deprecated]
     fn get<T: 'static + Default>(&self) -> &T;
 
+    /// See [ic::store](crate::ic::get_mut)
     #[deprecated]
     fn get_mut<T: 'static + Default>(&self) -> &mut T;
 
+    /// See [ic::store](crate::ic::delete)
     #[deprecated]
     fn delete<T: 'static + Default>(&self) -> bool;
 }
