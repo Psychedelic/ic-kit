@@ -2,6 +2,7 @@
 members = [
     "ic-kit",
     "ic-kit-sys",
+    "ic-kit-macros",
 ]
 
 [profile.release]

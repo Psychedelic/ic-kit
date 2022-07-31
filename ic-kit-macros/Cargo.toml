@@ -1,0 +1,25 @@
+[package]
+name = "ic-kit-macros"
+version = "0.1.0"
+edition = "2021"
+authors = ["Parsa Ghadimi <i@parsa.ooo>"]
+description = "IC-Kit's macros for canister development"
+license = "GPL-3.0"
+repository = "https://github.com/Psychedelic/ic-kit"
+documentation = "https://docs.rs/ic-kit-macros"
+categories = ["api-bindings", "development-tools::testing"]
+keywords = ["internet-computer", "canister", "cdk", "fleek"]
+include = ["src", "Cargo.toml", "README.md"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+quote = "1.0"
+proc-macro2 = "1.0"
+syn = "1.0"
+serde = "1.0"
+serde_tokenstream = "0.1"
+lazy_static = "1.4"
+
+[lib]
+proc-macro = true
