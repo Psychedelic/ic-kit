@@ -19,6 +19,7 @@ pub mod interfaces;
 pub mod stable;
 /// Internal storage abstraction for singletons.
 pub mod storage;
+pub mod runtime;
 
 /// async_std::test to be used for async tests when not targeting WASM.
 #[cfg(not(target_family = "wasm"))]

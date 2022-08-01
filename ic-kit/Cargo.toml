@@ -13,6 +13,7 @@ keywords = ["internet-computer", "canister", "cdk", "fleek"]
 include = ["src", "Cargo.toml", "README.md"]
 
 [dependencies]
+ic-kit-sys = {path="../ic-kit-sys", version="0.1.0"}
 ic-kit-macros = {path="../ic-kit-macros", version="0.1.0"}
 ic-cdk = "0.5"
 candid="0.7"

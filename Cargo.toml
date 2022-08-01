@@ -3,6 +3,7 @@ members = [
     "ic-kit",
     "ic-kit-sys",
     "ic-kit-macros",
+    "ic-kit-runtime",
 ]
 
 [profile.release]
