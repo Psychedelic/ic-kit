@@ -67,7 +67,15 @@ macro_rules! ic0_module {
                 Trap,
             }
 
+            impl From<()> for Response {
+                #[inline(always)]
+                fn from(_: ()) -> Self {
+                    Response::None
+                }
+            }
+
             impl Into<()> for Response {
+                #[inline(always)]
                 fn into(self) -> () {
                     match self {
                         Response::None => (),
@@ -77,7 +85,15 @@ macro_rules! ic0_module {
                 }
             }
 
+            impl From<isize> for Response {
+                #[inline(always)]
+                fn from(n: isize) -> Self {
+                    Response::Isize(n)
+                }
+            }
+
             impl Into<isize> for Response {
+                #[inline(always)]
                 fn into(self) -> isize {
                     match self {
                         Response::Isize(n) => n,
@@ -87,7 +103,15 @@ macro_rules! ic0_module {
                 }
             }
 
+            impl From<i32> for Response {
+                #[inline(always)]
+                fn from(n: i32) -> Self {
+                    Response::I32(n)
+                }
+            }
+
             impl Into<i32> for Response {
+                #[inline(always)]
                 fn into(self) -> i32 {
                     match self {
                         Response::I32(n) => n,
@@ -97,7 +121,15 @@ macro_rules! ic0_module {
                 }
             }
 
+            impl From<i64> for Response {
+                #[inline(always)]
+                fn from(n: i64) -> Self {
+                    Response::I64(n)
+                }
+            }
+
             impl Into<i64> for Response {
+                #[inline(always)]
                 fn into(self) -> i64 {
                     match self {
                         Response::I64(n) => n,
@@ -115,6 +147,17 @@ macro_rules! ic0_module {
                     $($argname: $argtype,)*
                 },
                 )*
+            }
+
+            impl Request {
+                #[inline(always)]
+                pub fn proxy<H: Ic0CallHandler>(self, handler: &mut H) -> Response {
+                    match self {
+                        $(
+                        Request::$name { $($argname,)* } => handler.$name($($argname,)*).into(),
+                        )*
+                    }
+                }
             }
 
             pub struct RuntimeHandle {

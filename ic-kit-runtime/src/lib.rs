@@ -1,8 +1,12 @@
-mod handle;
-
-use actix::prelude::*;
+use futures::executor::block_on;
+use ic_kit_sys::ic0;
+use ic_kit_sys::ic0::runtime;
 use ic_kit_sys::ic0::Ic0CallHandler;
 use std::fmt::{Display, Formatter};
+use std::panic::set_hook;
+use std::thread::JoinHandle;
+use tokio::select;
+use tokio::sync::mpsc::{self, Receiver, Sender};
 
 pub struct Runtime {
     /// The request we're currently processing.
@@ -12,6 +16,16 @@ pub struct Runtime {
     /// The current call that is being constructed. When `call_perform` gets called we will push
     /// this value to self.calls.
     call_factory: Option<IncompleteCall>,
+    /// The thread in which the canister is being executed at.
+    execution_thread_handle: JoinHandle<()>,
+    /// The communication channel to send tasks to the execution thread.
+    task_tx: Sender<Box<dyn Fn() + Send>>,
+    /// Emits when the task we just sent has returned.
+    task_returned_rx: Receiver<()>,
+    /// To send the response to the calls.
+    reply_tx: Sender<runtime::Response>,
+    /// The channel that we use to get the requests from the execution thread.
+    request_rx: Receiver<runtime::Request>,
 }
 
 pub enum Request {
@@ -43,6 +57,83 @@ pub struct Call {}
 pub struct IncompleteCall {}
 
 impl Runtime {
+    pub fn new() -> Self {
+        let (request_tx, request_rx) = mpsc::channel(8);
+        let (reply_tx, reply_rx) = mpsc::channel(8);
+        let (task_tx, mut task_rx) = mpsc::channel::<Box<dyn Fn() + Send>>(8);
+        let (mut task_returned_tx, task_returned_rx) = mpsc::channel(8);
+
+        let thread = std::thread::spawn(move || {
+            // Register the ic-kit-sys handler for current thread, this will make ic-kit-sys to
+            // forward all of the system calls done in the current thread to the provided channel
+            // and use the rx channel for waiting on responses.
+            let handle = runtime::RuntimeHandle::new(reply_rx, request_tx);
+            ic0::register_handler(handle);
+
+            // set the custom panic hook, this will give us:
+            // 1. No message such as "thread panic during test" in the terminal.
+            // 2. Allow us to notify the main thread that we panicked.
+            // 3. Also allows us to signal the task runner that the task has returned, so it can
+            //    stop waiting for requests made by us.
+            let task_panicked_tx = task_returned_tx.clone();
+            set_hook(Box::new(move |_| {
+                block_on(async {
+                    let trap_message = "Canister panicked";
+                    unsafe {
+                        ic0::trap(trap_message.as_ptr() as isize, trap_message.len() as isize)
+                    };
+                    task_panicked_tx.send(()).await.expect("ic-kit-runtime: Execution thread could not send task-completion signal to the main thread after panic.");
+                });
+            }));
+
+            block_on(async {
+                while let Some(task) = task_rx.recv().await {
+                    task();
+                    task_returned_tx.send(()).await.expect("ic-kit-runtime: Execution thread could not send task-completion signal to the main thread.")
+                }
+            });
+        });
+
+        Self {
+            processing: None,
+            perform_calls: vec![],
+            call_factory: None,
+            execution_thread_handle: thread,
+            task_tx,
+            task_returned_rx,
+            reply_tx,
+            request_rx,
+        }
+    }
+
+    /// Send a request to the execution thread and waits until it's finished.
+    pub async fn send(&mut self, request: Request) {
+        self.task_tx
+            .send(Box::new(|| {
+                println!("Some function related to the request.")
+            }))
+            .await
+            .unwrap_or_else(|_| {
+                panic!("ic-kit-runtime: Could not send the task to the execution thread.")
+            });
+
+        loop {
+            select! {
+                Some(()) = self.task_returned_rx.recv() => {
+                    // Okay the task returned successfully, we can give up.
+                    return;
+                },
+                Some(req) = self.request_rx.recv() => {
+                    let res = req.proxy(self);
+                    self.reply_tx
+                        .send(res)
+                        .await
+                        .expect("ic-kit-runtime: Could not send the system API call's response to the execution thread.");
+                }
+            }
+        }
+    }
+
     pub fn explicit_trap(&mut self, message: String) -> ! {
         panic!("Canister Trapped: {}", message)
     }
