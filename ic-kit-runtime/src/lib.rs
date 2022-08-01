@@ -1,8 +1,9 @@
+mod handle;
+
 use actix::prelude::*;
 use ic_kit_sys::ic0::Ic0CallHandler;
 use std::fmt::{Display, Formatter};
 
-#[derive(Default)]
 pub struct Runtime {
     /// The request we're currently processing.
     processing: Option<Request>,
@@ -43,7 +44,7 @@ pub struct IncompleteCall {}
 
 impl Runtime {
     pub fn explicit_trap(&mut self, message: String) -> ! {
-        panic!("Trapped!")
+        panic!("Canister Trapped: {}", message)
     }
 }
 
@@ -60,12 +61,34 @@ impl Ic0CallHandler for Runtime {
             Request::Query { arg_data, .. } => arg_data.len() as isize,
             Request::CanisterInspect { arg_data, .. } => arg_data.len() as isize,
             Request::ReplyCallback { arg_data, .. } => arg_data.len() as isize,
-            _ => self.explicit_trap(format!("ic0::msg_arg_data_size called from '{}'")),
+            r => self.explicit_trap(format!(
+                "ic0::msg_arg_data_size was invoked from canister_'{}'",
+                r
+            )),
         }
     }
 
     fn msg_arg_data_copy(&mut self, dst: isize, offset: isize, size: isize) {
-        todo!()
+        let req = self
+            .processing
+            .as_ref()
+            .expect("Unexpected: No request is being processed.");
+
+        let arg_data = match req {
+            Request::Init { arg_data, .. } => arg_data,
+            Request::Update { arg_data, .. } => arg_data,
+            Request::Query { arg_data, .. } => arg_data,
+            Request::CanisterInspect { arg_data, .. } => arg_data,
+            Request::ReplyCallback { arg_data, .. } => arg_data,
+            r => self.explicit_trap(format!(
+                "ic0::msg_arg_data_copy was invoked from canister_'{}'",
+                r
+            )),
+        };
+
+        copy_to_canister(dst, offset, size, arg_data)
+            .map_err(|e| self.explicit_trap(e))
+            .expect("TODO: panic message");
     }
 
     fn msg_caller_size(&mut self) -> isize {
@@ -272,16 +295,16 @@ impl Display for Request {
     }
 }
 
-#[test]
-fn x() {
-    let mut runtime = Runtime::default();
-    unsafe {
-        let mut bytes = Vec::<u8>::with_capacity(100);
-        let ptr64 = bytes.as_mut_ptr() as i64;
-        let ptr32 = bytes.as_mut_ptr() as i32;
-        let ptr_isize = bytes.as_mut_ptr() as isize;
-        println!("ptr64 = {}", ptr64);
-        println!("ptr32 = {}", ptr32);
-        println!("ptris = {}", ptr_isize);
+fn copy_to_canister(dst: isize, offset: isize, size: isize, data: &[u8]) -> Result<(), String> {
+    let dst = dst as usize;
+    let offset = offset as usize;
+    let size = size as usize;
+
+    if offset + size > data.len() {
+        return Err("Out of bound read.".into());
     }
+
+    let slice = unsafe { std::slice::from_raw_parts_mut(dst as *mut u8, size) };
+    slice.copy_from_slice(&data[offset..offset + size]);
+    Ok(())
 }

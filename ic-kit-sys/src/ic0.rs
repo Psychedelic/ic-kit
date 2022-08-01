@@ -50,6 +50,105 @@ macro_rules! ic0_module {
             )*
         }
 
+        /// The runtime module provides the tools to have the canister in one thread and communicate
+        /// with another handler on another thread.
+        #[cfg(feature = "runtime")]
+        pub mod runtime {
+            use futures::executor::block_on;
+            use super::Ic0CallHandler;
+
+            /// A response from the runtime to the canister.
+            #[derive(Debug)]
+            pub enum Response {
+                None,
+                Isize(isize),
+                I32(i32),
+                I64(i64),
+                Trap,
+            }
+
+            impl Into<()> for Response {
+                fn into(self) -> () {
+                    match self {
+                        Response::None => (),
+                        Response::Trap => panic!("Canister trapped."),
+                        _ => panic!("unexpected type cast."),
+                    }
+                }
+            }
+
+            impl Into<isize> for Response {
+                fn into(self) -> isize {
+                    match self {
+                        Response::Isize(n) => n,
+                        Response::Trap => panic!("Canister trapped."),
+                        _ => panic!("unexpected type cast."),
+                    }
+                }
+            }
+
+            impl Into<i32> for Response {
+                fn into(self) -> i32 {
+                    match self {
+                        Response::I32(n) => n,
+                        Response::Trap => panic!("Canister trapped."),
+                        _ => panic!("unexpected type cast."),
+                    }
+                }
+            }
+
+            impl Into<i64> for Response {
+                fn into(self) -> i64 {
+                    match self {
+                        Response::I64(n) => n,
+                        Response::Trap => panic!("Canister trapped."),
+                        _ => panic!("unexpected type cast."),
+                    }
+                }
+            }
+
+            /// A request from the canister to the handler.
+            #[derive(Debug)]
+            pub enum Request {
+                $(
+                $name {
+                    $($argname: $argtype,)*
+                },
+                )*
+            }
+
+            pub struct RuntimeHandle {
+                rx: tokio::sync::mpsc::Receiver<Response>,
+                tx: tokio::sync::mpsc::Sender<Request>,
+            }
+
+            impl RuntimeHandle {
+                pub fn new(
+                    rx: tokio::sync::mpsc::Receiver<Response>,
+                    tx: tokio::sync::mpsc::Sender<Request>,
+                ) -> Self {
+                    Self {
+                        rx,
+                        tx
+                    }
+                }
+            }
+
+            impl Ic0CallHandler for RuntimeHandle {
+                $(
+                fn $name(&mut self, $($argname: $argtype,)*) -> _ic0_module_ret!($rettype) {
+                    block_on(async {
+                        self.tx
+                            .send(Request::$name {$($argname,)*})
+                            .await
+                            .expect("ic-kit-runtime: Failed to send message from canister thread.");
+                        self.rx.recv().await.expect("Channel closed").into()
+                    })
+                }
+                )*
+            }
+        }
+
         $(
         #[cfg(not(target_arch = "wasm32"))]
         pub unsafe fn $name($( $argname: $argtype, )*) -> _ic0_module_ret!($rettype) {

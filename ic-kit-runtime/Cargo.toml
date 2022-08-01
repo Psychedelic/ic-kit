@@ -6,6 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ic-kit-sys = {path="../ic-kit-sys", version="0.1.0"}
+ic-kit-sys = {path="../ic-kit-sys", version="0.1.0", features=["runtime"]}
+futures = "0.3"
 tokio = "1.20"
 actix = "0.13"
