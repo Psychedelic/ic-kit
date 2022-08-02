@@ -15,7 +15,6 @@ mod wasm;
 pub mod ic;
 /// The type definition of common canisters on the Internet Computer.
 pub mod interfaces;
-pub mod runtime;
 /// The APIs for StableReader/StableWriter.
 pub mod stable;
 /// Internal storage abstraction for singletons.
