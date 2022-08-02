@@ -15,6 +15,7 @@ include = ["src", "Cargo.toml", "README.md"]
 [dependencies]
 ic-kit-sys = {path="../ic-kit-sys", version="0.1.0"}
 ic-kit-macros = {path="../ic-kit-macros", version="0.1.0"}
+ic-kit-runtime = {path="../ic-kit-runtime", version="0.0.1"}
 ic-cdk = "0.5"
 candid="0.7"
 serde = { version="1.0.130", features = ["derive"] }

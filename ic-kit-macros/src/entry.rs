@@ -95,6 +95,7 @@ pub fn gen_entry_point_code(
         )
     })?;
     let signature = &fun.sig;
+    let visibility = &fun.vis;
     let generics = &signature.generics;
 
     if !generics.params.is_empty() {
@@ -184,6 +185,19 @@ pub fn gen_entry_point_code(
     };
 
     Ok(quote! {
+        #[doc(hidden)]
+        #[allow(non_camel_case_types)]
+        #visibility struct #name {}
+
+        impl ic_kit::rt::CanisterMethod for #name {
+            const EXPORT_NAME: &'static str = #export_name;
+
+            fn exported_method() {
+                #outer_function_ident()
+            }
+        }
+
+        #[doc(hidden)]
         #[export_name = #export_name]
         fn #outer_function_ident() {
             ic_kit::setup();

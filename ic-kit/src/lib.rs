@@ -15,11 +15,11 @@ mod wasm;
 pub mod ic;
 /// The type definition of common canisters on the Internet Computer.
 pub mod interfaces;
+pub mod runtime;
 /// The APIs for StableReader/StableWriter.
 pub mod stable;
 /// Internal storage abstraction for singletons.
 pub mod storage;
-pub mod runtime;
 
 /// async_std::test to be used for async tests when not targeting WASM.
 #[cfg(not(target_family = "wasm"))]
@@ -28,6 +28,7 @@ pub use ic_cdk::api::call::{CallResult, RejectionCode};
 pub use ic_cdk::export::candid;
 pub use ic_cdk::export::Principal;
 pub use ic_kit_macros as macros;
+pub use ic_kit_runtime as rt;
 
 /// ic_cdk APIs to be used with ic-kit-macros only, please don't use this directly
 /// we may decide to change it anytime and break compatability.

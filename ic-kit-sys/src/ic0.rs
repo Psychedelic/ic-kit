@@ -141,6 +141,7 @@ macro_rules! ic0_module {
 
             /// A request from the canister to the handler.
             #[derive(Debug)]
+            #[allow(non_camel_case_types)]
             pub enum Request {
                 $(
                 $name {
@@ -160,6 +161,8 @@ macro_rules! ic0_module {
                 }
             }
 
+            /// A [`Ic0CallHandler`] that uses tokio mpsc channels to proxy system api calls
+            /// to another handler in another thread.
             pub struct RuntimeHandle {
                 rx: tokio::sync::mpsc::Receiver<Response>,
                 tx: tokio::sync::mpsc::Sender<Request>,

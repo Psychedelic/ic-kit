@@ -2,6 +2,7 @@ use futures::executor::block_on;
 use ic_kit_sys::ic0;
 use ic_kit_sys::ic0::runtime;
 use ic_kit_sys::ic0::Ic0CallHandler;
+use std::collections::HashMap;
 use std::fmt::{Display, Formatter};
 use std::panic::set_hook;
 use std::thread::JoinHandle;
@@ -9,6 +10,8 @@ use tokio::select;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 
 pub struct Runtime {
+    /// The id of the canister.
+    canister_id: Vec<u8>,
     /// The request we're currently processing.
     processing: Option<Request>,
     /// Inter-canister calls to perform if the current methods does not trap.
@@ -26,25 +29,35 @@ pub struct Runtime {
     reply_tx: Sender<runtime::Response>,
     /// The channel that we use to get the requests from the execution thread.
     request_rx: Receiver<runtime::Request>,
+    /// Maps the name of each
+    symbol_table: HashMap<String, Box<dyn Fn() + Send>>,
+}
+
+/// A method exported by the canister.
+pub trait CanisterMethod {
+    /// The export name of this method, this is the name that the method is
+    /// exported by in the WASM binary, examples could be:
+    /// - `canister_init`
+    /// - `canister_update increment`
+    /// - `canister_pre_upgrade`
+    ///
+    /// See:
+    /// https://internetcomputer.org/docs/current/references/ic-interface-spec/#entry-points
+    const EXPORT_NAME: &'static str;
+
+    /// The method which is exported by the canister in the WASM, since the entry points
+    /// should have a type `() -> ()`, we wrap the canister methods in a function in which
+    /// we perform the serialization/deserialization of arguments/responses, using the runtime
+    /// primitives.
+    fn exported_method();
 }
 
 pub enum Request {
-    Init {
-        arg_data: Vec<u8>,
-    },
-    Update {
-        arg_data: Vec<u8>,
-    },
-    Query {
-        arg_data: Vec<u8>,
-    },
-    CanisterInspect {
-        arg_data: Vec<u8>,
-        method_name: String,
-    },
-    ReplyCallback {
-        arg_data: Vec<u8>,
-    },
+    Init { arg: Vec<u8> },
+    Update { arg: Vec<u8> },
+    Query { arg: Vec<u8> },
+    CanisterInspect { arg: Vec<u8>, method_name: String },
+    ReplyCallback { arg: Vec<u8> },
     RejectCallback {},
     CleanupCallback {},
     Heartbeat,
@@ -57,7 +70,7 @@ pub struct Call {}
 pub struct IncompleteCall {}
 
 impl Runtime {
-    pub fn new() -> Self {
+    pub fn new<I: Into<Vec<u8>>>(canister_id: I) -> Self {
         let (request_tx, request_rx) = mpsc::channel(8);
         let (reply_tx, reply_rx) = mpsc::channel(8);
         let (task_tx, mut task_rx) = mpsc::channel::<Box<dyn Fn() + Send>>(8);
@@ -82,19 +95,24 @@ impl Runtime {
                     unsafe {
                         ic0::trap(trap_message.as_ptr() as isize, trap_message.len() as isize)
                     };
-                    task_panicked_tx.send(()).await.expect("ic-kit-runtime: Execution thread could not send task-completion signal to the main thread after panic.");
+                    task_panicked_tx.send(())
+                        .await
+                        .expect("ic-kit-runtime: Execution thread could not send task-completion signal to the main thread after panic.");
                 });
             }));
 
             block_on(async {
                 while let Some(task) = task_rx.recv().await {
                     task();
-                    task_returned_tx.send(()).await.expect("ic-kit-runtime: Execution thread could not send task-completion signal to the main thread.")
+                    task_returned_tx.send(())
+                        .await
+                        .expect("ic-kit-runtime: Execution thread could not send task-completion signal to the main thread.")
                 }
             });
         });
 
         Self {
+            canister_id: canister_id.into(),
             processing: None,
             perform_calls: vec![],
             call_factory: None,
@@ -103,7 +121,21 @@ impl Runtime {
             task_returned_rx,
             reply_tx,
             request_rx,
+            symbol_table: HashMap::new(),
         }
+    }
+
+    /// Provide the canister with the definition of the given method.
+    pub fn with_method<M: CanisterMethod + 'static>(mut self) -> Self {
+        let method_name = String::from(M::EXPORT_NAME);
+        let task_fn = Box::new(M::exported_method);
+
+        if self.symbol_table.contains_key(&method_name) {
+            panic!("The canister already has a '{}' method.", method_name);
+        }
+
+        self.symbol_table.insert(method_name, task_fn);
+        self
     }
 
     /// Send a request to the execution thread and waits until it's finished.
@@ -141,45 +173,11 @@ impl Runtime {
 
 impl Ic0CallHandler for Runtime {
     fn msg_arg_data_size(&mut self) -> isize {
-        let req = self
-            .processing
-            .as_ref()
-            .expect("Unexpected: No request is being processed.");
-
-        match req {
-            Request::Init { arg_data, .. } => arg_data.len() as isize,
-            Request::Update { arg_data, .. } => arg_data.len() as isize,
-            Request::Query { arg_data, .. } => arg_data.len() as isize,
-            Request::CanisterInspect { arg_data, .. } => arg_data.len() as isize,
-            Request::ReplyCallback { arg_data, .. } => arg_data.len() as isize,
-            r => self.explicit_trap(format!(
-                "ic0::msg_arg_data_size was invoked from canister_'{}'",
-                r
-            )),
-        }
+        todo!()
     }
 
     fn msg_arg_data_copy(&mut self, dst: isize, offset: isize, size: isize) {
-        let req = self
-            .processing
-            .as_ref()
-            .expect("Unexpected: No request is being processed.");
-
-        let arg_data = match req {
-            Request::Init { arg_data, .. } => arg_data,
-            Request::Update { arg_data, .. } => arg_data,
-            Request::Query { arg_data, .. } => arg_data,
-            Request::CanisterInspect { arg_data, .. } => arg_data,
-            Request::ReplyCallback { arg_data, .. } => arg_data,
-            r => self.explicit_trap(format!(
-                "ic0::msg_arg_data_copy was invoked from canister_'{}'",
-                r
-            )),
-        };
-
-        copy_to_canister(dst, offset, size, arg_data)
-            .map_err(|e| self.explicit_trap(e))
-            .expect("TODO: panic message");
+        todo!()
     }
 
     fn msg_caller_size(&mut self) -> isize {
