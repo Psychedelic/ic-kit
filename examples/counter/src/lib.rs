@@ -27,5 +27,5 @@ pub fn increment() -> u64 {
 
 #[test]
 fn test() {
-    let rt = ic_kit::rt::Runtime::new(vec![0]).with_method::<increment>();
+    let rt = ic_kit::rt::Canister::new(vec![0]).with_method::<increment>();
 }
