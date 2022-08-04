@@ -1,7 +1,5 @@
 use crate::canister::Canister;
 
-
-
 /// A local replica that contains one or several canisters.
 pub struct Replica {
     canisters: Vec<Canister>,

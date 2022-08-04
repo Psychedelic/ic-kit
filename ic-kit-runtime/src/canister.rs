@@ -1,9 +1,9 @@
 use crate::canister_id::CanisterId;
-use crate::request::{Env, Message, RequestId};
+use crate::request::{EntryMode, Env, Message, RequestId};
 use futures::executor::block_on;
 use ic_kit_sys::ic0;
 use ic_kit_sys::ic0::runtime;
-use ic_kit_sys::ic0::Ic0CallHandler;
+use ic_kit_sys::ic0::runtime::Ic0CallHandlerProxy;
 use ic_types::Principal;
 use std::any::Any;
 use std::collections::HashMap;
@@ -188,209 +188,224 @@ impl Canister {
             }
         }
     }
-
-    pub fn explicit_trap(&mut self, message: String) -> ! {
-        panic!("Canister Trapped: {}", message)
-    }
 }
 
-impl Ic0CallHandler for Canister {
-    fn msg_arg_data_size(&mut self) -> isize {
+impl Ic0CallHandlerProxy for Canister {
+    fn msg_arg_data_size(&mut self) -> Result<isize, String> {
         todo!()
     }
 
-    fn msg_arg_data_copy(&mut self, _dst: isize, _offset: isize, _size: isize) {
+    fn msg_arg_data_copy(&mut self, dst: isize, offset: isize, size: isize) -> Result<(), String> {
         todo!()
     }
 
-    fn msg_caller_size(&mut self) -> isize {
+    fn msg_caller_size(&mut self) -> Result<isize, String> {
         todo!()
     }
 
-    fn msg_caller_copy(&mut self, _dst: isize, _offset: isize, _size: isize) {
+    fn msg_caller_copy(&mut self, dst: isize, offset: isize, size: isize) -> Result<(), String> {
         todo!()
     }
 
-    fn msg_reject_code(&mut self) -> i32 {
+    fn msg_reject_code(&mut self) -> Result<i32, String> {
         todo!()
     }
 
-    fn msg_reject_msg_size(&mut self) -> isize {
+    fn msg_reject_msg_size(&mut self) -> Result<isize, String> {
         todo!()
     }
 
-    fn msg_reject_msg_copy(&mut self, _dst: isize, _offset: isize, _size: isize) {
+    fn msg_reject_msg_copy(
+        &mut self,
+        dst: isize,
+        offset: isize,
+        size: isize,
+    ) -> Result<(), String> {
         todo!()
     }
 
-    fn msg_reply_data_append(&mut self, _src: isize, _size: isize) {
+    fn msg_reply_data_append(&mut self, src: isize, size: isize) -> Result<(), String> {
         todo!()
     }
 
-    fn msg_reply(&mut self) {
+    fn msg_reply(&mut self) -> Result<(), String> {
         todo!()
     }
 
-    fn msg_reject(&mut self, _src: isize, _size: isize) {
+    fn msg_reject(&mut self, src: isize, size: isize) -> Result<(), String> {
         todo!()
     }
 
-    fn msg_cycles_available(&mut self) -> i64 {
+    fn msg_cycles_available(&mut self) -> Result<i64, String> {
         todo!()
     }
 
-    fn msg_cycles_available128(&mut self, _dst: isize) {
+    fn msg_cycles_available128(&mut self, dst: isize) -> Result<(), String> {
         todo!()
     }
 
-    fn msg_cycles_refunded(&mut self) -> i64 {
+    fn msg_cycles_refunded(&mut self) -> Result<i64, String> {
         todo!()
     }
 
-    fn msg_cycles_refunded128(&mut self, _dst: isize) {
+    fn msg_cycles_refunded128(&mut self, dst: isize) -> Result<(), String> {
         todo!()
     }
 
-    fn msg_cycles_accept(&mut self, _max_amount: i64) -> i64 {
+    fn msg_cycles_accept(&mut self, max_amount: i64) -> Result<i64, String> {
         todo!()
     }
 
-    fn msg_cycles_accept128(&mut self, _max_amount_high: i64, _max_amount_low: i64, _dst: isize) {
+    fn msg_cycles_accept128(
+        &mut self,
+        max_amount_high: i64,
+        max_amount_low: i64,
+        dst: isize,
+    ) -> Result<(), String> {
         todo!()
     }
 
-    fn canister_self_size(&mut self) -> isize {
+    fn canister_self_size(&mut self) -> Result<isize, String> {
         todo!()
     }
 
-    fn canister_self_copy(&mut self, _dst: isize, _offset: isize, _size: isize) {
+    fn canister_self_copy(&mut self, dst: isize, offset: isize, size: isize) -> Result<(), String> {
         todo!()
     }
 
-    fn canister_cycle_balance(&mut self) -> i64 {
+    fn canister_cycle_balance(&mut self) -> Result<i64, String> {
         todo!()
     }
 
-    fn canister_cycle_balance128(&mut self, _dst: isize) {
+    fn canister_cycle_balance128(&mut self, dst: isize) -> Result<(), String> {
         todo!()
     }
 
-    fn canister_status(&mut self) -> i32 {
+    fn canister_status(&mut self) -> Result<i32, String> {
         todo!()
     }
 
-    fn msg_method_name_size(&mut self) -> isize {
+    fn msg_method_name_size(&mut self) -> Result<isize, String> {
         todo!()
     }
 
-    fn msg_method_name_copy(&mut self, _dst: isize, _offset: isize, _size: isize) {
+    fn msg_method_name_copy(
+        &mut self,
+        dst: isize,
+        offset: isize,
+        size: isize,
+    ) -> Result<(), String> {
         todo!()
     }
 
-    fn accept_message(&mut self) {
+    fn accept_message(&mut self) -> Result<(), String> {
         todo!()
     }
 
     fn call_new(
         &mut self,
-        _callee_src: isize,
-        _callee_size: isize,
-        _name_src: isize,
-        _name_size: isize,
-        _reply_fun: isize,
-        _reply_env: isize,
-        _reject_fun: isize,
-        _reject_env: isize,
-    ) {
+        callee_src: isize,
+        callee_size: isize,
+        name_src: isize,
+        name_size: isize,
+        reply_fun: isize,
+        reply_env: isize,
+        reject_fun: isize,
+        reject_env: isize,
+    ) -> Result<(), String> {
         todo!()
     }
 
-    fn call_on_cleanup(&mut self, _fun: isize, _env: isize) {
+    fn call_on_cleanup(&mut self, fun: isize, env: isize) -> Result<(), String> {
         todo!()
     }
 
-    fn call_data_append(&mut self, _src: isize, _size: isize) {
+    fn call_data_append(&mut self, src: isize, size: isize) -> Result<(), String> {
         todo!()
     }
 
-    fn call_cycles_add(&mut self, _amount: i64) {
+    fn call_cycles_add(&mut self, amount: i64) -> Result<(), String> {
         todo!()
     }
 
-    fn call_cycles_add128(&mut self, _amount_high: i64, _amount_low: i64) {
+    fn call_cycles_add128(&mut self, amount_high: i64, amount_low: i64) -> Result<(), String> {
         todo!()
     }
 
-    fn call_perform(&mut self) -> i32 {
+    fn call_perform(&mut self) -> Result<i32, String> {
         todo!()
     }
 
-    fn stable_size(&mut self) -> i32 {
+    fn stable_size(&mut self) -> Result<i32, String> {
         todo!()
     }
 
-    fn stable_grow(&mut self, _new_pages: i32) -> i32 {
+    fn stable_grow(&mut self, new_pages: i32) -> Result<i32, String> {
         todo!()
     }
 
-    fn stable_write(&mut self, _offset: i32, _src: isize, _size: isize) {
+    fn stable_write(&mut self, offset: i32, src: isize, size: isize) -> Result<(), String> {
         todo!()
     }
 
-    fn stable_read(&mut self, _dst: isize, _offset: i32, _size: isize) {
+    fn stable_read(&mut self, dst: isize, offset: i32, size: isize) -> Result<(), String> {
         todo!()
     }
 
-    fn stable64_size(&mut self) -> i64 {
+    fn stable64_size(&mut self) -> Result<i64, String> {
         todo!()
     }
 
-    fn stable64_grow(&mut self, _new_pages: i64) -> i64 {
+    fn stable64_grow(&mut self, new_pages: i64) -> Result<i64, String> {
         todo!()
     }
 
-    fn stable64_write(&mut self, _offset: i64, _src: i64, _size: i64) {
+    fn stable64_write(&mut self, offset: i64, src: i64, size: i64) -> Result<(), String> {
         todo!()
     }
 
-    fn stable64_read(&mut self, _dst: i64, _offset: i64, _size: i64) {
+    fn stable64_read(&mut self, dst: i64, offset: i64, size: i64) -> Result<(), String> {
         todo!()
     }
 
-    fn certified_data_set(&mut self, _src: isize, _size: isize) {
+    fn certified_data_set(&mut self, src: isize, size: isize) -> Result<(), String> {
         todo!()
     }
 
-    fn data_certificate_present(&mut self) -> i32 {
+    fn data_certificate_present(&mut self) -> Result<i32, String> {
         todo!()
     }
 
-    fn data_certificate_size(&mut self) -> isize {
+    fn data_certificate_size(&mut self) -> Result<isize, String> {
         todo!()
     }
 
-    fn data_certificate_copy(&mut self, _dst: isize, _offset: isize, _size: isize) {
+    fn data_certificate_copy(
+        &mut self,
+        dst: isize,
+        offset: isize,
+        size: isize,
+    ) -> Result<(), String> {
         todo!()
     }
 
-    fn time(&mut self) -> i64 {
+    fn time(&mut self) -> Result<i64, String> {
         todo!()
     }
 
-    fn performance_counter(&mut self, _counter_type: i32) -> i64 {
+    fn performance_counter(&mut self, counter_type: i32) -> Result<i64, String> {
         todo!()
     }
 
-    fn debug_print(&mut self, _src: isize, _size: isize) {
+    fn debug_print(&mut self, src: isize, size: isize) -> Result<(), String> {
         todo!()
     }
 
-    fn trap(&mut self, _src: isize, _size: isize) {
+    fn trap(&mut self, src: isize, size: isize) -> Result<(), String> {
         todo!()
     }
 }
 
-/// Copy the provided data
 fn copy_to_canister(dst: isize, offset: isize, size: isize, data: &[u8]) -> Result<(), String> {
     let dst = dst as usize;
     let offset = offset as usize;

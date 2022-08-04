@@ -64,7 +64,7 @@ macro_rules! ic0_module {
                 Isize(isize),
                 I32(i32),
                 I64(i64),
-                Trap,
+                Trap(String),
             }
 
             impl From<()> for Response {
@@ -79,7 +79,7 @@ macro_rules! ic0_module {
                 fn into(self) -> () {
                     match self {
                         Response::None => (),
-                        Response::Trap => panic!("Canister trapped."),
+                        Response::Trap(m) => panic!("Canister trapped: {}", m),
                         _ => panic!("unexpected type cast."),
                     }
                 }
@@ -97,7 +97,7 @@ macro_rules! ic0_module {
                 fn into(self) -> isize {
                     match self {
                         Response::Isize(n) => n,
-                        Response::Trap => panic!("Canister trapped."),
+                        Response::Trap(m) => panic!("Canister trapped: {}", m),
                         _ => panic!("unexpected type cast."),
                     }
                 }
@@ -115,7 +115,7 @@ macro_rules! ic0_module {
                 fn into(self) -> i32 {
                     match self {
                         Response::I32(n) => n,
-                        Response::Trap => panic!("Canister trapped."),
+                        Response::Trap(m) => panic!("Canister trapped: {}", m),
                         _ => panic!("unexpected type cast."),
                     }
                 }
@@ -133,10 +133,24 @@ macro_rules! ic0_module {
                 fn into(self) -> i64 {
                     match self {
                         Response::I64(n) => n,
-                        Response::Trap => panic!("Canister trapped."),
+                        Response::Trap(m) => panic!("Canister trapped: {}", m),
                         _ => panic!("unexpected type cast."),
                     }
                 }
+            }
+
+            impl From<String> for Response {
+                #[inline(always)]
+                fn from(m: String) -> Self {
+                    Response::Trap(m)
+                }
+            }
+
+            /// The Ic0CallHandler on the main thread.
+            pub trait Ic0CallHandlerProxy {
+                $(
+                fn $name(&mut self, $($argname: $argtype,)*) -> Result<_ic0_module_ret!($rettype), String>;
+                )*
             }
 
             /// A request from the canister to the handler.
@@ -151,11 +165,14 @@ macro_rules! ic0_module {
             }
 
             impl Request {
+                /// Forward a request to a proxy
                 #[inline(always)]
-                pub fn proxy<H: Ic0CallHandler>(self, handler: &mut H) -> Response {
+                pub fn proxy<H: Ic0CallHandlerProxy>(self, handler: &mut H) -> Response {
                     match self {
                         $(
-                        Request::$name { $($argname,)* } => handler.$name($($argname,)*).into(),
+                        Request::$name { $($argname,)* } => handler.$name($($argname,)*)
+                            .map(Response::from)
+                            .unwrap_or_else(Response::from),
                         )*
                     }
                 }
