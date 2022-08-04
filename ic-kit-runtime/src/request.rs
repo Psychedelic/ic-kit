@@ -48,7 +48,7 @@ pub struct Env {
     /// The reply rejection code. Default to `0`
     pub rejection_code: RejectionCode,
     /// The rejection message. Only applicable when `rejection_code != 0`
-    pub rejection_message: Option<String>,
+    pub rejection_message: String,
 }
 
 /// Rejection code from calling another canister.
@@ -93,7 +93,7 @@ impl Default for Env {
             cycles_available: 0,
             args: vec![],
             rejection_code: RejectionCode::NoError,
-            rejection_message: None,
+            rejection_message: String::new(),
         }
     }
 }
@@ -140,7 +140,7 @@ impl Env {
 
     /// Set the rejection message on this env, only applicable if rejection_code is not zero.
     pub fn with_rejection_message<S: Into<String>>(mut self, rejection_message: S) -> Self {
-        self.rejection_message = Some(rejection_message.into());
+        self.rejection_message = rejection_message.into();
         self
     }
 }

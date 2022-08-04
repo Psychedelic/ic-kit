@@ -192,27 +192,98 @@ impl Canister {
 
 impl Ic0CallHandlerProxy for Canister {
     fn msg_arg_data_size(&mut self) -> Result<isize, String> {
-        todo!()
+        match self.env.entry_mode {
+            EntryMode::CustomTask
+            | EntryMode::Init
+            | EntryMode::Update
+            | EntryMode::Query
+            | EntryMode::ReplyCallback
+            | EntryMode::InspectMessage => Ok(self.env.args.len() as isize),
+            _ => Err(format!(
+                "msg_arg_data_size can not be called from '{}'",
+                self.env.get_entry_point_name()
+            )),
+        }
     }
 
     fn msg_arg_data_copy(&mut self, dst: isize, offset: isize, size: isize) -> Result<(), String> {
-        todo!()
+        match self.env.entry_mode {
+            EntryMode::CustomTask
+            | EntryMode::Init
+            | EntryMode::PostUpgrade
+            | EntryMode::Update
+            | EntryMode::Query
+            | EntryMode::ReplyCallback
+            | EntryMode::InspectMessage => {
+                let data = self.env.args.as_slice();
+                copy_to_canister(dst, offset, size, &data)?;
+                Ok(())
+            }
+            _ => Err(format!(
+                "msg_arg_data_copy can not be called from '{}'",
+                self.env.get_entry_point_name()
+            )),
+        }
     }
 
     fn msg_caller_size(&mut self) -> Result<isize, String> {
-        todo!()
+        match self.env.entry_mode {
+            EntryMode::CustomTask
+            | EntryMode::Init
+            | EntryMode::PostUpgrade
+            | EntryMode::PreUpgrade
+            | EntryMode::Update
+            | EntryMode::Query
+            | EntryMode::InspectMessage => Ok(self.env.sender.as_slice().len() as isize),
+            _ => Err(format!(
+                "msg_caller_size can not be called from '{}'",
+                self.env.get_entry_point_name()
+            )),
+        }
     }
 
     fn msg_caller_copy(&mut self, dst: isize, offset: isize, size: isize) -> Result<(), String> {
-        todo!()
+        match self.env.entry_mode {
+            EntryMode::CustomTask
+            | EntryMode::Init
+            | EntryMode::PostUpgrade
+            | EntryMode::PreUpgrade
+            | EntryMode::Update
+            | EntryMode::Query
+            | EntryMode::InspectMessage => {
+                let data = self.env.sender.as_slice();
+                copy_to_canister(dst, offset, size, &data)?;
+                Ok(())
+            }
+            _ => Err(format!(
+                "msg_caller_copy can not be called from '{}'",
+                self.env.get_entry_point_name()
+            )),
+        }
     }
 
     fn msg_reject_code(&mut self) -> Result<i32, String> {
-        todo!()
+        match self.env.entry_mode {
+            EntryMode::CustomTask | EntryMode::ReplyCallback | EntryMode::RejectCallback => {
+                Ok(self.env.rejection_code as i32)
+            }
+            _ => Err(format!(
+                "msg_reject_code can not be called from '{}'",
+                self.env.get_entry_point_name()
+            )),
+        }
     }
 
     fn msg_reject_msg_size(&mut self) -> Result<isize, String> {
-        todo!()
+        match self.env.entry_mode {
+            EntryMode::CustomTask | EntryMode::RejectCallback => {
+                Ok(self.env.rejection_message.len() as isize)
+            }
+            _ => Err(format!(
+                "msg_reject_msg_size can not be called from '{}'",
+                self.env.get_entry_point_name()
+            )),
+        }
     }
 
     fn msg_reject_msg_copy(
@@ -221,7 +292,17 @@ impl Ic0CallHandlerProxy for Canister {
         offset: isize,
         size: isize,
     ) -> Result<(), String> {
-        todo!()
+        match self.env.entry_mode {
+            EntryMode::CustomTask | EntryMode::RejectCallback => {
+                let data = self.env.rejection_message.as_bytes();
+                copy_to_canister(dst, offset, size, data)?;
+                Ok(())
+            }
+            _ => Err(format!(
+                "msg_reject_msg_copy can not be called from '{}'",
+                self.env.get_entry_point_name()
+            )),
+        }
     }
 
     fn msg_reply_data_append(&mut self, src: isize, size: isize) -> Result<(), String> {
