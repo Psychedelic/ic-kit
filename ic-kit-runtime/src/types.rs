@@ -200,3 +200,57 @@ impl Env {
         }
     }
 }
+
+pub struct CanisterId(Principal);
+
+impl From<CanisterId> for Principal {
+    fn from(id: CanisterId) -> Self {
+        id.0
+    }
+}
+
+impl From<Principal> for CanisterId {
+    fn from(id: Principal) -> Self {
+        Self(id)
+    }
+}
+
+impl CanisterId {
+    /// Create a canister id from a u64, borrowed from ic source code with minor modification.
+    pub const fn from_u64(val: u64) -> Self {
+        // It is important to use big endian here to ensure that the generated
+        // `PrincipalId`s still maintain ordering.
+        let mut data = [0_u8; 29];
+
+        // Specify explicitly the length, so as to assert at compile time that a u64
+        // takes exactly 8 bytes
+        let val: [u8; 8] = val.to_be_bytes();
+
+        // for-loops in const fn are not supported
+        data[0] = val[0];
+        data[1] = val[1];
+        data[2] = val[2];
+        data[3] = val[3];
+        data[4] = val[4];
+        data[5] = val[5];
+        data[6] = val[6];
+        data[7] = val[7];
+
+        // Even though not defined in the interface spec, add another 0x1 to the array
+        // to create a sub category that could be used in future.
+        data[8] = 0x01;
+        data[9] = 0x01;
+
+        let len : u8 = 8 /* the u64 */ + 2 /* the last 0x01 */;
+
+        struct PrincipalLayout {
+            len: u8,
+            bytes: [u8; 29],
+        }
+
+        let id = PrincipalLayout { len, bytes: data };
+        let principal = unsafe { *((&id as *const PrincipalLayout) as *const Principal) };
+
+        Self(principal)
+    }
+}

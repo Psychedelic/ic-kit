@@ -5,7 +5,6 @@ use std::collections::HashMap;
 /// associated with each types.
 #[derive(Default)]
 pub struct Storage {
-    // TODO(qti3e) put Box in a RefCell when we get rid of get_mut::
     storage: HashMap<TypeId, Box<dyn Any>>,
 }
 

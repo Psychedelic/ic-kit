@@ -1,68 +1,67 @@
 use crate::candid::utils::{ArgumentDecoder, ArgumentEncoder};
-pub use crate::stable::*;
-use crate::{candid, CallResponse, Context, Principal, StableMemoryError};
+use crate::storage::Storage;
+use candid::Principal;
+use ic_cdk::api::call::CallResult;
+use ic_cdk::api::stable::StableMemoryError;
+use std::cell::RefCell;
+use std::future::Future;
+use std::pin::Pin;
 
-#[inline(always)]
-fn get_context() -> &'static mut impl Context {
-    #[cfg(not(target_family = "wasm"))]
-    return crate::inject::get_context();
-    #[cfg(target_family = "wasm")]
-    return crate::wasm::IcContext::context();
-}
+thread_local!(static STORAGE: RefCell<Storage> = RefCell::new(Storage::default()));
 
-/// Trap the code.
+pub type CallResponse<T> = Pin<Box<dyn Future<Output = CallResult<T>>>>;
+
 #[inline(always)]
 pub fn trap(message: &str) -> ! {
-    get_context().trap(message)
+    todo!()
 }
 
 /// Print a message.
 #[inline(always)]
 pub fn print<S: AsRef<str>>(s: S) {
-    get_context().print(s)
+    todo!()
 }
 
 /// ID of the current canister.
 #[inline(always)]
 pub fn id() -> Principal {
-    get_context().id()
+    todo!()
 }
 
 /// The time in nanoseconds.
 #[inline(always)]
 pub fn time() -> u64 {
-    get_context().time()
+    todo!()
 }
 
 /// The balance of the canister.
 #[inline(always)]
 pub fn balance() -> u64 {
-    get_context().balance()
+    todo!()
 }
 
 /// The caller who has invoked this method on the canister.
 #[inline(always)]
 pub fn caller() -> Principal {
-    get_context().caller()
+    todo!()
 }
 
 /// Return the number of available cycles that is sent by the caller.
-#[inline(always)]
 pub fn msg_cycles_available() -> u64 {
-    get_context().msg_cycles_available()
+    todo!()
 }
 
 /// Accept the given amount of cycles, returns the actual amount of accepted cycles.
 #[inline(always)]
 pub fn msg_cycles_accept(amount: u64) -> u64 {
-    get_context().msg_cycles_accept(amount)
+    todo!()
 }
 
 /// Return the cycles that were sent back by the canister that was just called.
 /// This method should only be called right after an inter-canister call.
 #[inline(always)]
 pub fn msg_cycles_refunded() -> u64 {
-    get_context().msg_cycles_refunded()
+    todo!()
 }
 
 /// Store the given data to the stable storage.
@@ -71,7 +70,7 @@ pub fn stable_store<T>(data: T) -> Result<(), candid::Error>
 where
     T: ArgumentEncoder,
 {
-    get_context().stable_store(data)
+    todo!()
 }
 
 /// Restore the data from the stable storage. If the data is not already stored the None value
@@ -81,7 +80,7 @@ pub fn stable_restore<T>() -> Result<T, String>
 where
     T: for<'de> ArgumentDecoder<'de>,
 {
-    get_context().stable_restore()
+    todo!()
 }
 
 /// Perform a call.
@@ -92,7 +91,7 @@ pub fn call_raw<S: Into<String>>(
     args_raw: Vec<u8>,
     cycles: u64,
 ) -> CallResponse<Vec<u8>> {
-    get_context().call_raw(id, method, args_raw, cycles)
+    todo!()
 }
 
 /// Perform the call and return the response.
@@ -102,7 +101,7 @@ pub fn call<T: ArgumentEncoder, R: for<'a> ArgumentDecoder<'a>, S: Into<String>>
     method: S,
     args: T,
 ) -> CallResponse<R> {
-    get_context().call_with_payment(id, method, args, 0)
+    todo!()
 }
 
 #[inline(always)]
@@ -112,32 +111,32 @@ pub fn call_with_payment<T: ArgumentEncoder, R: for<'a> ArgumentDecoder<'a>, S: 
     args: T,
     cycles: u64,
 ) -> CallResponse<R> {
-    get_context().call_with_payment(id, method, args, cycles)
+    todo!()
 }
 
 /// Set the certified data of the canister, this method traps if data.len > 32.
 #[inline(always)]
 pub fn set_certified_data(data: &[u8]) {
-    get_context().set_certified_data(data)
+    todo!()
 }
 
 /// Returns the data certificate authenticating certified_data set by this canister.
 #[inline(always)]
 pub fn data_certificate() -> Option<Vec<u8>> {
-    get_context().data_certificate()
+    todo!()
 }
 
 /// Execute a future without blocking the current call.
 #[inline(always)]
 pub fn spawn<F: 'static + std::future::Future<Output = ()>>(future: F) {
-    get_context().spawn(future)
+    todo!()
 }
 
 /// Returns the current size of the stable memory in WebAssembly pages.
 /// (One WebAssembly page is 64KiB)
 #[inline(always)]
 pub fn stable_size() -> u32 {
-    get_context().stable_size()
+    todo!()
 }
 
 /// Tries to grow the memory by new_pages many pages containing zeroes.
@@ -146,19 +145,19 @@ pub fn stable_size() -> u32 {
 /// Otherwise, it grows the memory and returns the previous size of the memory in pages.
 #[inline(always)]
 pub fn stable_grow(new_pages: u32) -> Result<u32, StableMemoryError> {
-    get_context().stable_grow(new_pages)
+    todo!()
 }
 
 /// Writes data to the stable memory location specified by an offset.
 #[inline(always)]
 pub fn stable_write(offset: u32, buf: &[u8]) {
-    get_context().stable_write(offset, buf)
+    todo!()
 }
 
 /// Reads data from the stable memory location specified by an offset.
 #[inline(always)]
 pub fn stable_read(offset: u32, buf: &mut [u8]) {
-    get_context().stable_read(offset, buf)
+    todo!()
 }
 
 /// Returns a copy of the stable memory.
@@ -168,15 +167,7 @@ pub fn stable_read(offset: u32, buf: &mut [u8]) {
 ///
 /// Only use it with caution.
 pub fn stable_bytes() -> Vec<u8> {
-    let size = (stable_size() as usize) << 16;
-    let mut vec = Vec::with_capacity(size);
-    unsafe {
-        vec.set_len(size);
-    }
-
-    stable_read(0, vec.as_mut_slice());
-
-    vec
+    todo!()
 }
 
 /// Pass an immutable reference to the value associated with the given type to the closure.
@@ -211,13 +202,13 @@ pub fn stable_bytes() -> Vec<u8> {
 /// assert_eq!(ic::with(Counter::get), 17);
 /// ```
 pub fn with<T: 'static + Default, U, F: FnOnce(&T) -> U>(callback: F) -> U {
-    get_context().with(callback)
+    todo!()
 }
 
 /// Like [`with`], but does not initialize the data with the default value and simply returns None,
 /// if there is no value associated with the type.
 pub fn maybe_with<T: 'static, U, F: FnOnce(&T) -> U>(callback: F) -> Option<U> {
-    get_context().maybe_with(callback)
+    todo!()
 }
 
 /// Pass a mutable reference to the value associated with the given type to the closure.
@@ -253,21 +244,21 @@ pub fn maybe_with<T: 'static, U, F: FnOnce(&T) -> U>(callback: F) -> Option<U> {
 /// assert_eq!(ic::with_mut(Counter::increment), 18);
 /// ```
 pub fn with_mut<T: 'static + Default, U, F: FnOnce(&mut T) -> U>(callback: F) -> U {
-    get_context().with_mut(callback)
+    todo!()
 }
 
 /// Like [`with_mut`], but does not initialize the data with the default value and simply returns
 /// None, if there is no value associated with the type.
 pub fn maybe_with_mut<T: 'static, U, F: FnOnce(&mut T) -> U>(callback: F) -> Option<U> {
-    get_context().maybe_with_mut(callback)
+    todo!()
 }
 
 /// Remove the current value associated with the type and return it.
 pub fn take<T: 'static>() -> Option<T> {
-    get_context().take::<T>()
+    todo!()
 }
 
 /// Swaps the value associated with type `T` with the given value, returns the old one.
 pub fn swap<T: 'static>(value: T) -> Option<T> {
-    get_context().swap(value)
+    todo!()
 }

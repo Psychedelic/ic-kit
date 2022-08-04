@@ -1,7 +1,6 @@
-use crate::canister_id::CanisterId;
-use crate::request::{
-    CanisterReply, EntryMode, Env, IncomingRequestId, Message, OutgoingRequestId, RejectionCode,
-    RequestId,
+use crate::types::{
+    CanisterId, CanisterReply, EntryMode, Env, IncomingRequestId, Message, OutgoingRequestId,
+    RejectionCode, RequestId,
 };
 use futures::executor::block_on;
 use ic_kit_sys::ic0;
@@ -558,11 +557,13 @@ impl Ic0CallHandlerProxy for Canister {
     }
 
     fn canister_self_size(&mut self) -> Result<isize, String> {
-        todo!()
+        Ok(self.canister_id.len() as isize)
     }
 
     fn canister_self_copy(&mut self, dst: isize, offset: isize, size: isize) -> Result<(), String> {
-        todo!()
+        let data = self.canister_id.as_slice();
+        copy_to_canister(dst, offset, size, data)?;
+        Ok(())
     }
 
     fn canister_cycle_balance(&mut self) -> Result<i64, String> {
