@@ -9,6 +9,7 @@ use ic_kit_sys::ic0::runtime;
 use ic_kit_sys::ic0::runtime::Ic0CallHandlerProxy;
 use ic_types::Principal;
 use std::any::Any;
+use std::cmp::min;
 use std::collections::HashMap;
 use std::panic::{catch_unwind, RefUnwindSafe};
 use std::thread::JoinHandle;
@@ -30,6 +31,11 @@ pub struct Canister {
     /// Map each incoming request to its response channel, if it is None, it means the
     /// message has already been responded to.
     msg_reply_senders: HashMap<IncomingRequestId, oneshot::Sender<CanisterReply>>,
+    /// The amount of available cycles for each incoming request. This is only used
+    /// for recovering self.env state for reply callbacks.
+    cycles_available_store: HashMap<IncomingRequestId, u128>,
+    /// Amount of cycles accept during this message process.
+    cycles_accepted: u128,
     /// Map each of the out going requests done by this canister to the callbacks for that
     /// call.
     outgoing_calls: HashMap<OutgoingRequestId, RequestCallbacks>,
@@ -138,6 +144,8 @@ impl Canister {
             symbol_table: HashMap::new(),
             msg_reply_data: HashMap::new(),
             msg_reply_senders: HashMap::new(),
+            cycles_available_store: HashMap::new(),
+            cycles_accepted: 0,
             outgoing_calls: HashMap::new(),
             env: Env::default(),
             request_id: None,
@@ -426,23 +434,94 @@ impl Ic0CallHandlerProxy for Canister {
     }
 
     fn msg_cycles_available(&mut self) -> Result<i64, String> {
-        todo!()
+        match self.env.entry_mode {
+            EntryMode::CustomTask
+            | EntryMode::Update
+            | EntryMode::ReplyCallback
+            | EntryMode::RejectCallback => {
+                if self.env.cycles_available > (u64::MAX as u128) {
+                    return Err(format!("available cycles does not fit in u64"));
+                }
+
+                Ok(self.env.cycles_available as u64 as i64)
+            }
+            _ => Err(format!(
+                "msg_cycles_available can not be called from '{}'",
+                self.env.get_entry_point_name()
+            )),
+        }
     }
 
     fn msg_cycles_available128(&mut self, dst: isize) -> Result<(), String> {
-        todo!()
+        match self.env.entry_mode {
+            EntryMode::CustomTask
+            | EntryMode::Update
+            | EntryMode::ReplyCallback
+            | EntryMode::RejectCallback => {
+                let data = self.env.cycles_available.to_le_bytes();
+                copy_to_canister(dst, 0, 16, &data)?;
+                Ok(())
+            }
+            _ => Err(format!(
+                "msg_cycles_available128 can not be called from '{}'",
+                self.env.get_entry_point_name()
+            )),
+        }
     }
 
     fn msg_cycles_refunded(&mut self) -> Result<i64, String> {
-        todo!()
+        match self.env.entry_mode {
+            EntryMode::CustomTask | EntryMode::ReplyCallback | EntryMode::RejectCallback => {
+                if self.env.cycles_refunded > (u64::MAX as u128) {
+                    return Err(format!("refunded cycles does not fit in u64"));
+                }
+
+                Ok(self.env.cycles_refunded as u64 as i64)
+            }
+            _ => Err(format!(
+                "msg_cycles_refunded can not be called from '{}'",
+                self.env.get_entry_point_name()
+            )),
+        }
     }
 
     fn msg_cycles_refunded128(&mut self, dst: isize) -> Result<(), String> {
-        todo!()
+        match self.env.entry_mode {
+            EntryMode::CustomTask | EntryMode::ReplyCallback | EntryMode::RejectCallback => {
+                let data = self.env.cycles_refunded.to_le_bytes();
+                copy_to_canister(dst, 0, 16, &data)?;
+                Ok(())
+            }
+            _ => Err(format!(
+                "msg_cycles_refunded128 can not be called from '{}'",
+                self.env.get_entry_point_name()
+            )),
+        }
     }
 
     fn msg_cycles_accept(&mut self, max_amount: i64) -> Result<i64, String> {
-        todo!()
+        let message_id = match self.env.entry_mode {
+            EntryMode::CustomTask
+            | EntryMode::Update
+            | EntryMode::ReplyCallback
+            | EntryMode::RejectCallback => self
+                .request_id
+                .expect("ic-kit: Unexpected canister state, request_id not set."),
+            _ => {
+                return Err(format!(
+                    "msg_cycles_accept can not be called from '{}'",
+                    self.env.get_entry_point_name()
+                ))
+            }
+        };
+
+        let amount = self.env.cycles_available.min(max_amount as u128);
+        self.env.cycles_available -= amount;
+        self.cycles_accepted += amount;
+        self.cycles_available_store
+            .insert(message_id, self.env.cycles_available);
+
+        Ok(amount as i64)
     }
 
     fn msg_cycles_accept128(
@@ -451,7 +530,31 @@ impl Ic0CallHandlerProxy for Canister {
         max_amount_low: i64,
         dst: isize,
     ) -> Result<(), String> {
-        todo!()
+        let message_id = match self.env.entry_mode {
+            EntryMode::CustomTask
+            | EntryMode::Update
+            | EntryMode::ReplyCallback
+            | EntryMode::RejectCallback => self
+                .request_id
+                .expect("ic-kit: Unexpected canister state, request_id not set."),
+            _ => {
+                return Err(format!(
+                    "msg_cycles_accept128 can not be called from '{}'",
+                    self.env.get_entry_point_name()
+                ))
+            }
+        };
+
+        let max_amount =
+            (max_amount_high as u128) + (max_amount_low as u128) * (u64::MAX as u128 + 1);
+        let amount = self.env.cycles_available.min(max_amount);
+        self.env.cycles_available -= amount;
+        self.cycles_accepted += amount;
+        self.cycles_available_store
+            .insert(message_id, self.env.cycles_available);
+        copy_to_canister(dst, 0, 16, &amount.to_le_bytes())?;
+
+        Ok(())
     }
 
     fn canister_self_size(&mut self) -> Result<isize, String> {

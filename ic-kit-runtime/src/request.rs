@@ -45,9 +45,10 @@ pub struct Env {
     pub sender: Principal,
     /// The method to call. Only applies to update/query calls.
     pub method_name: Option<String>,
-    /// The cycles provided to the canister during this call. In a reply or reject callback mode
-    /// this is the amount of refunded cycles.
+    /// The cycles provided to the canister during this call.
     pub cycles_available: u128,
+    /// The amount of refunded cycles.
+    pub cycles_refunded: u128,
     /// The arguments provided to the canister during this call.
     pub args: Vec<u8>,
     /// The reply rejection code. Default to `0`
@@ -112,6 +113,7 @@ impl Default for Env {
             sender: Principal::anonymous(),
             method_name: None,
             cycles_available: 0,
+            cycles_refunded: 0,
             args: vec![],
             rejection_code: RejectionCode::NoError,
             rejection_message: String::new(),
@@ -138,10 +140,16 @@ impl Env {
         self
     }
 
-    /// Provide the current env with the given amount of cycles to execute, in a reply or reject
-    /// callback modes, this should be the amount that is refunded to the canister.
-    pub fn with_cycles(mut self, cycles: u128) -> Self {
+    /// Provide the current env with the given amount of cycles to execute.
+    pub fn with_cycles_available(mut self, cycles: u128) -> Self {
         self.cycles_available = cycles;
+        self
+    }
+
+    /// Provide the current env with the given amount of refunded cycles, only applicable
+    /// if this is reply/reject callback.
+    pub fn with_cycles_refunded(mut self, cycles: u128) -> Self {
+        self.cycles_refunded = cycles;
         self
     }
 
