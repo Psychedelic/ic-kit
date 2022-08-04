@@ -200,6 +200,7 @@ pub fn gen_entry_point_code(
         #[doc(hidden)]
         #[export_name = #export_name]
         fn #outer_function_ident() {
+            #[cfg(target_family = "wasm")]
             ic_kit::setup();
 
             #guard
