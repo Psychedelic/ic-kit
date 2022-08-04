@@ -7,8 +7,7 @@ pub struct Replica {
 
 #[test]
 fn use_replica() {
-    let id = CanisterId(1);
-    let _replica = Replica {
-        canisters: vec![Canister::new(id)],
-    };
+    // let _replica = Replica {
+    //     // canisters: vec![Canister::new(id)],
+    // };
 }

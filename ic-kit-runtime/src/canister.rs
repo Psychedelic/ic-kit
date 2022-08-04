@@ -1,5 +1,8 @@
 use crate::canister_id::CanisterId;
-use crate::request::{EntryMode, Env, Message, RequestId};
+use crate::request::{
+    CanisterReply, EntryMode, Env, IncomingRequestId, Message, OutgoingRequestId, RejectionCode,
+    RequestId,
+};
 use futures::executor::block_on;
 use ic_kit_sys::ic0;
 use ic_kit_sys::ic0::runtime;
@@ -12,11 +15,7 @@ use std::thread::JoinHandle;
 use thread_local_panic_hook::set_hook;
 use tokio::select;
 use tokio::sync::mpsc::{self, Receiver, Sender};
-
-///  A request ID for a request that is coming to this canister from the outside.
-type IncomingRequestId = RequestId;
-/// A request ID for a request that this canister has submitted.
-type OutgoingRequestId = RequestId;
+use tokio::sync::oneshot;
 
 /// A canister that is being executed.
 pub struct Canister {
@@ -26,10 +25,18 @@ pub struct Canister {
     balance: u128,
     /// Maps the name of each of exported methods to the task function.
     symbol_table: HashMap<String, Box<dyn Fn() + Send + RefUnwindSafe>>,
-    /// Map each incoming request id to the response buffer for it that is under construction.
-    replies: HashMap<IncomingRequestId, Vec<u8>>,
+    /// Map each incoming request id the response we're generating for it.
+    msg_reply_data: HashMap<IncomingRequestId, Vec<u8>>,
+    /// Map each incoming request to its response channel, if it is None, it means the
+    /// message has already been responded to.
+    msg_reply_senders: HashMap<IncomingRequestId, oneshot::Sender<CanisterReply>>,
+    /// Map each of the out going requests done by this canister to the callbacks for that
+    /// call.
+    outgoing_calls: HashMap<OutgoingRequestId, RequestCallbacks>,
     /// The canister execution environment.
     env: Env,
+    /// The request id of the current incoming message.
+    request_id: Option<IncomingRequestId>,
     /// The thread in which the canister is being executed at.
     execution_thread_handle: JoinHandle<()>,
     /// The communication channel to send tasks to the execution thread.
@@ -56,7 +63,7 @@ type Callback = (isize, isize);
 struct RequestCallbacks {
     /// The original top-level message which caused this inter-canister call, this is used so
     /// for example when `ic0::msg_reply` is called, we know which call to respond to.
-    message_id: RequestId,
+    message_id: IncomingRequestId,
     /// The reply callback that must be called for a reply.
     reply: Callback,
     /// The reject callback that must be called for a reject.
@@ -129,8 +136,11 @@ impl Canister {
             canister_id: Vec::from(Principal::from(canister_id).as_slice()),
             balance: 100_000_000_000_000,
             symbol_table: HashMap::new(),
-            replies: HashMap::new(),
+            msg_reply_data: HashMap::new(),
+            msg_reply_senders: HashMap::new(),
+            outgoing_calls: HashMap::new(),
             env: Env::default(),
+            request_id: None,
             execution_thread_handle,
             task_tx,
             task_completion_rx,
@@ -306,15 +316,113 @@ impl Ic0CallHandlerProxy for Canister {
     }
 
     fn msg_reply_data_append(&mut self, src: isize, size: isize) -> Result<(), String> {
-        todo!()
+        let message_id = match self.env.entry_mode {
+            EntryMode::CustomTask
+            | EntryMode::Update
+            | EntryMode::Query
+            | EntryMode::ReplyCallback
+            | EntryMode::RejectCallback => {
+                // this should always be present when processing a call.
+                self.request_id
+                    .expect("ic-kit: Unexpected canister state, request_id not set.")
+            }
+            _ => {
+                return Err(format!(
+                    "msg_reply_data_append can not be called from '{}'",
+                    self.env.get_entry_point_name()
+                ))
+            }
+        };
+
+        if !self.msg_reply_senders.contains_key(&message_id) {
+            return Err(format!(
+                "msg_reply_data_append may only be invoked before canister responses."
+            ));
+        }
+
+        let reply_data = self.msg_reply_data.entry(message_id).or_default();
+        reply_data.extend_from_slice(copy_from_canister(src, size));
+
+        Ok(())
     }
 
     fn msg_reply(&mut self) -> Result<(), String> {
-        todo!()
+        let message_id = match self.env.entry_mode {
+            EntryMode::CustomTask
+            | EntryMode::Update
+            | EntryMode::Query
+            | EntryMode::ReplyCallback
+            | EntryMode::RejectCallback => {
+                // this should always be present when processing a call.
+                self.request_id
+                    .expect("ic-kit: Unexpected canister state, request_id not set.")
+            }
+            _ => {
+                return Err(format!(
+                    "msg_reply can not be called from '{}'",
+                    self.env.get_entry_point_name()
+                ))
+            }
+        };
+
+        let reply_chan = self
+            .msg_reply_senders
+            .remove(&message_id)
+            .ok_or_else(|| format!("msg_reply may only be invoked before canister responses."))?;
+
+        let data = self.msg_reply_data.remove(&message_id).unwrap_or_default();
+        let cycles_refunded = self.env.cycles_available;
+        reply_chan
+            .send(CanisterReply::Reply {
+                data,
+                cycles_refunded,
+            })
+            .expect("ic-kit: could not send the response.");
+        self.env.cycles_available = 0;
+
+        Ok(())
     }
 
     fn msg_reject(&mut self, src: isize, size: isize) -> Result<(), String> {
-        todo!()
+        let message_id = match self.env.entry_mode {
+            EntryMode::CustomTask
+            | EntryMode::Update
+            | EntryMode::Query
+            | EntryMode::ReplyCallback
+            | EntryMode::RejectCallback => {
+                // this should always be present when processing a call.
+                self.request_id
+                    .expect("ic-kit: Unexpected canister state, request_id not set.")
+            }
+            _ => {
+                return Err(format!(
+                    "msg_reject can not be called from '{}'",
+                    self.env.get_entry_point_name()
+                ))
+            }
+        };
+
+        let reply_chan = self
+            .msg_reply_senders
+            .remove(&message_id)
+            .ok_or_else(|| format!("msg_reject may only be invoked before canister responses."))?;
+
+        // we don't care about the data anymore.
+        self.msg_reply_data.remove(&message_id);
+
+        let cycles_refunded = self.env.cycles_available;
+        let rejection_message = String::from_utf8_lossy(copy_from_canister(src, size)).into();
+
+        reply_chan
+            .send(CanisterReply::Reject {
+                rejection_code: RejectionCode::CanisterReject,
+                rejection_message,
+                cycles_refunded,
+            })
+            .expect("ic-kit: could not send the response.");
+        self.env.cycles_available = 0;
+
+        Ok(())
     }
 
     fn msg_cycles_available(&mut self) -> Result<i64, String> {
@@ -501,12 +609,11 @@ fn copy_to_canister(dst: isize, offset: isize, size: isize, data: &[u8]) -> Resu
     Ok(())
 }
 
-fn copy_from_canister(src: isize, size: isize) -> Vec<u8> {
+fn copy_from_canister<'a>(src: isize, size: isize) -> &'a [u8] {
     let src = src as usize;
     let size = size as usize;
 
-    let slice = unsafe { std::slice::from_raw_parts(src as *const u8, size) };
-    Vec::from(slice)
+    unsafe { std::slice::from_raw_parts(src as *const u8, size) }
 }
 
 fn downcast_panic_payload(payload: &Box<dyn Any + Send>) -> String {

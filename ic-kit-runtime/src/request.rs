@@ -4,6 +4,11 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 const REQUEST_ID: AtomicU64 = AtomicU64::new(0);
 
+///  A request ID for a request that is coming to this canister from the outside.
+pub type IncomingRequestId = RequestId;
+/// A request ID for a request that this canister has submitted.
+pub type OutgoingRequestId = RequestId;
+
 /// An opaque request id.
 #[derive(Hash, Clone, Copy, Ord, PartialOrd, Eq, PartialEq, Debug)]
 pub struct RequestId(u64);
@@ -70,6 +75,8 @@ pub enum RejectionCode {
 pub enum Message {
     /// A custom function that you want to be executed in the canister's execution thread.
     CustomTask {
+        /// The request id of the incoming message.
+        request_id: Option<IncomingRequestId>,
         /// the task handler that should be executed in the canister's execution thread.
         task: Box<dyn FnOnce() + Send + RefUnwindSafe>,
         /// The env to use for this custom execution.
@@ -78,9 +85,23 @@ pub enum Message {
     /// A normal IC request to the canister.
     Request {
         /// Only applicable if env.entry_mode is a reply/reject callback.
-        reply_to: Option<RequestId>,
+        reply_to: Option<OutgoingRequestId>,
         /// The env to use during the execution of this task.
         env: Env,
+    },
+}
+
+/// A reply by the canister.
+#[derive(Debug)]
+pub enum CanisterReply {
+    Reply {
+        data: Vec<u8>,
+        cycles_refunded: u128,
+    },
+    Reject {
+        rejection_code: RejectionCode,
+        rejection_message: String,
+        cycles_refunded: u128,
     },
 }
 
