@@ -1,3 +1,4 @@
+use std::borrow::Borrow;
 // Code from Dfinity's ic-cdk because there is no other way to do this xD
 //
 // This is not from a single file in the ic-cdk, but i jut put this pieces together here, with
@@ -133,7 +134,7 @@ struct CallFutureState {
     waker: Option<Waker>,
 }
 
-/// A simple state-less future that
+/// A simple state-less future that is resolved when any of the call's callbacks are called.
 pub struct CallFuture {
     // We basically use Rc instead of Arc (since we're single threaded), and use
     // RefCell instead of Mutex (because we cannot lock in WASM).
@@ -164,9 +165,15 @@ impl CallFuture {
         }
         self
     }
+
+    /// Returns true if the call future is already resolved.
+    pub fn is_ready(&self) -> bool {
+        self.state.borrow_mut().ready
+    }
 }
 
-/// Perform a ic0::call_new and return the call future for it.
+/// Perform a ic0::call_new and return the call future for it. Additionally this method invokes
+/// the `ic0::call_on_cleanup` to set the future cleanup method.
 pub unsafe fn call_new(canister_id: Principal, method: &str) -> CallFuture {
     let callee = canister_id.as_slice();
     let state = WasmCell::new(CallFutureState {
@@ -185,6 +192,8 @@ pub unsafe fn call_new(canister_id: Principal, method: &str) -> CallFuture {
         callback as usize as isize,
         state_ptr as isize,
     );
+
+    ic0::call_on_cleanup(cleanup as usize as isize, state_ptr as isize);
 
     CallFuture { state }
 }

@@ -1,6 +1,6 @@
+mod futures;
 mod setup;
 
-mod futures;
 /// APIs/Methods to work with the Internet Computer.
 pub mod ic;
 /// The APIs for StableReader/StableWriter.
@@ -8,11 +8,13 @@ pub mod ic;
 /// Internal storage abstraction for singletons.
 pub mod storage;
 
+// re-exports.
 pub use candid::{self, CandidType, Principal};
+pub use futures::CallFuture;
 pub use ic_cdk::api::call::{CallResult, RejectionCode};
 pub use ic_kit_macros as macros;
 pub use ic_kit_runtime as rt;
-pub use setup::*;
+pub use setup::setup_hooks;
 
 /// ic_cdk APIs to be used with ic-kit-macros only, please don't use this directly
 /// we may decide to change it anytime and break compatability.

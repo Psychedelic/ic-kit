@@ -3,7 +3,7 @@ use std::panic;
 
 static mut DONE: bool = false;
 
-pub fn setup() {
+pub fn setup_hooks() {
     unsafe {
         if DONE {
             return;
