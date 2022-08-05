@@ -77,31 +77,3 @@ impl Storage {
             .map(|cell| *cell.downcast::<T>().unwrap())
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use crate::storage::Storage;
-
-    #[derive(Default)]
-    struct Counter {
-        count: u64,
-    }
-
-    impl Counter {
-        pub fn get(&self) -> u64 {
-            self.count
-        }
-
-        pub fn increment(&mut self) -> u64 {
-            self.count += 1;
-            self.count
-        }
-    }
-
-    #[test]
-    fn test_storage() {
-        let mut storage = Storage::default();
-        assert_eq!(storage.with(Counter::get), 0);
-        assert_eq!(storage.with_mut(Counter::increment), 1);
-    }
-}

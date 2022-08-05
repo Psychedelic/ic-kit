@@ -11,7 +11,7 @@ pub fn setup() {
         DONE = true;
     }
 
-    set_panic_hook()
+    set_panic_hook();
 }
 
 /// Sets a custom panic hook, uses debug.trace

@@ -62,6 +62,8 @@ enum Completion {
 
 /// Any of the reply, reject or clean up callbacks.
 /// (callback_fun, callback_env)
+///
+/// The callback_fun can be set to -1 for one-way calls.
 type Callback = (isize, isize);
 
 /// The callbacks

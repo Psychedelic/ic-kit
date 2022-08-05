@@ -1,22 +1,18 @@
-pub use setup::*;
-
 mod setup;
 
+mod futures;
 /// APIs/Methods to work with the Internet Computer.
 pub mod ic;
 /// The APIs for StableReader/StableWriter.
-pub mod stable;
+// pub mod stable;
 /// Internal storage abstraction for singletons.
 pub mod storage;
 
-/// async_std::test to be used for async tests when not targeting WASM.
-#[cfg(not(target_family = "wasm"))]
-pub use async_std::test as async_test;
+pub use candid::{self, CandidType, Principal};
 pub use ic_cdk::api::call::{CallResult, RejectionCode};
-pub use ic_cdk::export::candid;
-pub use ic_cdk::export::Principal;
 pub use ic_kit_macros as macros;
 pub use ic_kit_runtime as rt;
+pub use setup::*;
 
 /// ic_cdk APIs to be used with ic-kit-macros only, please don't use this directly
 /// we may decide to change it anytime and break compatability.

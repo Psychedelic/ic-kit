@@ -1,7 +1,29 @@
+/// Provides utility methods to deal with stable storage on your canister.
 // This file is copied from ic_cdk, but changed so that it works with IC-Kit.
 use crate::ic::{stable_grow, stable_read, stable_size, stable_write};
-use crate::StableMemoryError;
+use std::error;
+use std::fmt;
 use std::io;
+
+/// A possible error value when dealing with stable memory.
+#[derive(Debug)]
+pub enum StableMemoryError {
+    /// No more stable memory could be allocated.
+    OutOfMemory,
+    /// Attempted to read more stable memory than had been allocated.
+    OutOfBounds,
+}
+
+impl fmt::Display for StableMemoryError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            Self::OutOfMemory => f.write_str("Out of memory"),
+            Self::OutOfBounds => f.write_str("Read exceeds allocated memory"),
+        }
+    }
+}
+
+impl error::Error for StableMemoryError {}
 
 /// A writer to the stable memory.
 ///
