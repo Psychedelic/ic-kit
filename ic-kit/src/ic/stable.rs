@@ -3,7 +3,7 @@ use ic_cdk::api::stable::StableMemoryError;
 
 /// Store the given data to the stable storage.
 #[inline(always)]
-pub fn stable_store<T>(data: T) -> Result<(), candid::Error>
+pub fn stable_store<T>(_data: T) -> Result<(), candid::Error>
 where
     T: ArgumentEncoder,
 {
@@ -32,19 +32,19 @@ pub fn stable_size() -> u32 {
 /// Errors if the new size of the memory exceeds 2^32 bytes or growing is unsuccessful.
 /// Otherwise, it grows the memory and returns the previous size of the memory in pages.
 #[inline(always)]
-pub fn stable_grow(new_pages: u32) -> Result<u32, StableMemoryError> {
+pub fn stable_grow(_new_pages: u32) -> Result<u32, StableMemoryError> {
     todo!()
 }
 
 /// Writes data to the stable memory location specified by an offset.
 #[inline(always)]
-pub fn stable_write(offset: u32, buf: &[u8]) {
+pub fn stable_write(_offset: u32, _buf: &[u8]) {
     todo!()
 }
 
 /// Reads data from the stable memory location specified by an offset.
 #[inline(always)]
-pub fn stable_read(offset: u32, buf: &mut [u8]) {
+pub fn stable_read(_offset: u32, _buf: &mut [u8]) {
     todo!()
 }
 

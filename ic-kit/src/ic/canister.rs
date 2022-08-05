@@ -63,7 +63,7 @@ pub fn caller() -> Principal {
 
 /// Set the certified data of the canister, this method traps if data.len > 32.
 #[inline(always)]
-pub fn set_certified_data(data: &[u8]) {
+pub fn set_certified_data(_data: &[u8]) {
     todo!()
 }
 

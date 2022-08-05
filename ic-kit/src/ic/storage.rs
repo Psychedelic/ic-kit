@@ -1,6 +1,5 @@
 use crate::storage::Storage;
 use std::cell::RefCell;
-use std::collections::HashMap;
 
 thread_local! {
     static STORAGE: RefCell<Storage> = RefCell::new(Storage::default());
@@ -56,8 +55,6 @@ pub fn swap<T: 'static>(value: T) -> Option<T> {
 }
 
 mod future {
-    use tokio::sync::oneshot;
-    use wasm_rs_async_executor::single_threaded::{run, spawn};
 
     #[test]
     fn play() {

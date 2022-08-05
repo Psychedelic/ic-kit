@@ -1,4 +1,3 @@
-use std::borrow::Borrow;
 // Code from Dfinity's ic-cdk because there is no other way to do this xD
 //
 // This is not from a single file in the ic-cdk, but i jut put this pieces together here, with
@@ -9,7 +8,6 @@ use std::borrow::Borrow;
 // response using ic0::msg_arg_data_* can be implemented else where depending on the user level
 // needs.
 use candid::Principal;
-use ic_cdk::call;
 use ic_kit_sys::ic0;
 use std::future::Future;
 use std::pin::Pin;
@@ -159,7 +157,7 @@ impl Future for CallFuture {
 
 impl CallFuture {
     /// Resolve the future. This will make the future to be at a Ready state when polled.
-    pub fn mark_ready(mut self) -> Self {
+    pub fn mark_ready(self) -> Self {
         {
             self.state.borrow_mut().ready = true;
         }

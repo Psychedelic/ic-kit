@@ -2,11 +2,10 @@ use crate::futures;
 use crate::futures::CallFuture;
 use candid::utils::{ArgumentDecoder, ArgumentEncoder};
 use candid::{decode_args, encode_args, encode_one, CandidType, Principal};
-use ic_cdk::api::call::CallResult;
+
 use ic_kit_sys::ic0;
 use serde::Deserialize;
-use std::borrow::BorrowMut;
-use std::cell::RefCell;
+
 use std::error;
 use std::fmt;
 use std::fmt::Write;
@@ -179,13 +178,9 @@ impl CallBuilder {
             ic0::call_cycles_add128(high as i64, low as i64);
         }
 
-        let args_raw = self
-            .arg
-            .as_ref()
-            .map(|v| v.as_slice())
-            .unwrap_or_else(|| CANDID_EMPTY_ARG);
+        let args_raw = self.arg.as_deref().unwrap_or_else(|| CANDID_EMPTY_ARG);
 
-        if args_raw.len() > 0 {
+        if !args_raw.is_empty() {
             ic0::call_data_append(args_raw.as_ptr() as isize, args_raw.len() as isize);
         }
 
@@ -199,7 +194,7 @@ impl CallBuilder {
     ///
     /// This method traps if the amount determined in the `payment` is larger than the canister's
     /// balance at the time of invocation.
-    pub fn perform_one_way(mut self) {
+    pub fn perform_one_way(self) {
         let callee = self.canister_id.as_slice();
         let method = self.method_name.as_str();
 
