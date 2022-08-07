@@ -1,5 +1,10 @@
 use ic_kit_sys::ic0;
 
+/// Return the size of the raw argument to this entry point.
+pub fn arg_data_size() -> usize {
+    unsafe { ic0::msg_arg_data_size() as usize }
+}
+
 /// Return the raw argument data to this entry point.
 pub fn arg_data_raw() -> Vec<u8> {
     unsafe {

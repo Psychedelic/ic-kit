@@ -44,6 +44,13 @@ impl EntryPoint {
             _ => true,
         }
     }
+
+    pub fn is_inspect_message(&self) -> bool {
+        match &self {
+            EntryPoint::InspectMessage => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Deserialize)]
@@ -97,6 +104,8 @@ pub fn gen_entry_point_code(
     let signature = &fun.sig;
     let visibility = &fun.vis;
     let generics = &signature.generics;
+    let is_async = signature.asyncness.is_some();
+    let name = &signature.ident;
 
     if !generics.params.is_empty() {
         return Err(Error::new(
@@ -108,8 +117,6 @@ pub fn gen_entry_point_code(
         ));
     }
 
-    let is_async = signature.asyncness.is_some();
-
     let return_length = match &signature.output {
         ReturnType::Default => 0,
         ReturnType::Type(_, ty) => match ty.as_ref() {
@@ -118,20 +125,48 @@ pub fn gen_entry_point_code(
         },
     };
 
-    if entry_point.is_lifecycle() && return_length > 0 {
+    if entry_point.is_lifecycle() && !entry_point.is_inspect_message() && return_length > 0 {
         return Err(Error::new(
             Span::call_site(),
             format!("#[{}] function cannot have a return value.", entry_point),
         ));
     }
 
-    let arg_tuple: Vec<Ident> = collect_args(entry_point, signature)?;
-    let name = &signature.ident;
+    if entry_point.is_inspect_message() && return_length != 1 {
+        return Err(Error::new(
+            Span::call_site(),
+            format!(
+                "#[{}] function must have a boolean return value.",
+                entry_point
+            ),
+        ));
+    }
+
+    if is_async && entry_point.is_lifecycle() {
+        return Err(Error::new(
+            Span::call_site(),
+            format!("#[{}] function cannot be async.", entry_point),
+        ));
+    }
 
     let outer_function_ident = Ident::new(
-        &format!("canister_{}_{}_", entry_point, name),
+        &format!("_ic_kit_canister_{}_{}", entry_point, name),
         Span::call_site(),
     );
+
+    let guard = if let Some(guard_name) = attrs.guard {
+        let guard_ident = Ident::new(&guard_name, Span::call_site());
+
+        quote! {
+            let r: Result<(), String> = #guard_ident ();
+            if let Err(e) = r {
+                ic_kit::utils::reject(&e);
+                return;
+            }
+        }
+    } else {
+        quote! {}
+    };
 
     let export_name = if entry_point.is_lifecycle() {
         format!("canister_{}", entry_point)
@@ -143,52 +178,81 @@ pub fn gen_entry_point_code(
         )
     };
 
-    let function_call = if is_async {
-        quote! { #name ( #(#arg_tuple),* ) .await }
-    } else {
-        quote! { #name ( #(#arg_tuple),* ) }
-    };
-
+    // Build the outer function's body.
+    let arg_tuple: Vec<Ident> = collect_args(entry_point, signature)?;
     let arg_count = arg_tuple.len();
 
-    let return_encode = if entry_point.is_lifecycle() {
+    // If the method does not accept any arguments, don't even read the msg_data, and if the
+    // deserialization fails, just reject the message, which is cheaper than trap.
+    let arg_decode = if arg_count == 0 {
+        quote! {}
+    } else {
+        quote! {
+            let bytes = ic_kit::utils::arg_data();
+            let args = match ic_kit::candid::decode_args(&bytes) {
+                Ok(v) => v,
+                Err(_) => {
+                    ic_kit::utils::reject("Could not decode arguments.");
+                    return;
+                };
+            }
+            let ( #( #arg_tuple, )* ) = args;
+        }
+    };
+
+    let return_encode = if entry_point.is_inspect_message() {
+        quote! {
+            let result: bool = result;
+            if result == true {
+                ic_kit::utils::accept();
+            }
+        }
+    } else if entry_point.is_lifecycle() {
         quote! {}
     } else {
         match return_length {
-            0 => quote! { ic_kit::ic_call_api_v0_::reply(()) },
-            1 => quote! { ic_kit::ic_call_api_v0_::reply((result,)) },
-            _ => quote! { ic_kit::ic_call_api_v0_::reply(result) },
+            0 => quote! {
+                // Send the precomputed `encode_args(())` available in ic-kit.
+                let _ = result; // to ignore result not being used.
+                ic_kit::utils::reply(ic_kit::ic::CANDID_EMPTY_ARG)
+            },
+            1 => quote! {
+                let bytes = ic_kit::candid::encode_one(result)
+                    .expect("Could not encode canister's response.");
+                ic_kit::utils::reply(&bytes);
+            },
+            _ => quote! {
+                let bytes = ic_kit::candid::encode_args(result)
+                    .expect("Could not encode canister's response.");
+                ic_kit::utils::reply(&bytes);
+            },
         }
     };
 
-    // On initialization we can actually not receive any input and it's okay, only if
-    // we don't have any arguments either.
-    // If the data we receive is not empty, then try to unwrap it as if it's DID.
-    let arg_decode = if entry_point.is_lifecycle() && arg_count == 0 {
-        quote! {}
-    } else {
-        quote! { let ( #( #arg_tuple, )* ) = ic_kit::ic_call_api_v0_::arg_data(); }
-    };
-
-    let guard = if let Some(guard_name) = attrs.guard {
-        let guard_ident = Ident::new(&guard_name, Span::call_site());
-
+    // only spawn for async methods.
+    let body = if is_async {
         quote! {
-            let r: Result<(), String> = #guard_ident ();
-            if let Err(e) = r {
-                ic_kit::ic_call_api_v0_::reject(&e);
-                return;
-            }
+            ic_kit::ic::spawn(async {
+                #arg_decode
+                let result = #name ( #(#arg_tuple),* ).await;
+                #return_encode
+            })
         }
     } else {
-        quote! {}
+        quote! {
+            #arg_decode
+            let result = #name ( #(#arg_tuple),* );
+            #return_encode
+        }
     };
 
     Ok(quote! {
         #[doc(hidden)]
         #[allow(non_camel_case_types)]
+        #[cfg(not(target_family = "wasm"))]
         #visibility struct #name {}
 
+        #[cfg(not(target_family = "wasm"))]
         impl ic_kit::rt::CanisterMethod for #name {
             const EXPORT_NAME: &'static str = #export_name;
 
@@ -201,17 +265,13 @@ pub fn gen_entry_point_code(
         #[export_name = #export_name]
         fn #outer_function_ident() {
             #[cfg(target_family = "wasm")]
-            ic_kit::setup();
+            ic_kit::setup_hooks();
 
             #guard
-
-            ic_kit::ic::spawn(async {
-                #arg_decode
-                let result = #function_call;
-                #return_encode
-            });
+            #body
         }
 
+        #[inline(always)]
         #item
     })
 }

@@ -344,7 +344,9 @@ impl Ic0CallHandlerProxy for Canister {
         };
 
         if !self.msg_reply_senders.contains_key(&message_id) {
-            return Err("msg_reply_data_append may only be invoked before canister responses.".to_string());
+            return Err(
+                "msg_reply_data_append may only be invoked before canister responses.".to_string(),
+            );
         }
 
         let reply_data = self.msg_reply_data.entry(message_id).or_default();
@@ -372,10 +374,9 @@ impl Ic0CallHandlerProxy for Canister {
             }
         };
 
-        let reply_chan = self
-            .msg_reply_senders
-            .remove(&message_id)
-            .ok_or_else(|| "msg_reply may only be invoked before canister responses.".to_string())?;
+        let reply_chan = self.msg_reply_senders.remove(&message_id).ok_or_else(|| {
+            "msg_reply may only be invoked before canister responses.".to_string()
+        })?;
 
         let data = self.msg_reply_data.remove(&message_id).unwrap_or_default();
         let cycles_refunded = self.env.cycles_available;
@@ -409,10 +410,9 @@ impl Ic0CallHandlerProxy for Canister {
             }
         };
 
-        let reply_chan = self
-            .msg_reply_senders
-            .remove(&message_id)
-            .ok_or_else(|| "msg_reject may only be invoked before canister responses.".to_string())?;
+        let reply_chan = self.msg_reply_senders.remove(&message_id).ok_or_else(|| {
+            "msg_reject may only be invoked before canister responses.".to_string()
+        })?;
 
         // we don't care about the data anymore.
         self.msg_reply_data.remove(&message_id);
