@@ -1,4 +1,4 @@
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_family = "wasm"))]
 thread_local!(static HANDLER: std::cell::RefCell<Option<Box<dyn Ic0CallHandler>>> = std::cell::RefCell::new(None));
 
 /// Register a handler to be used for handling the canister call in non-wasm environments.
@@ -7,12 +7,12 @@ thread_local!(static HANDLER: std::cell::RefCell<Option<Box<dyn Ic0CallHandler>>
 ///
 /// If called from within a canister.
 pub fn register_handler<H: Ic0CallHandler + 'static>(handler: H) {
-    #[cfg(not(target_arch = "wasm32"))]
+    #[cfg(not(target_family = "wasm"))]
     HANDLER.with(|c| {
         let _ = c.borrow_mut().insert(Box::new(handler));
     });
 
-    #[cfg(target_arch = "wasm32")]
+    #[cfg(target_family = "wasm")]
     {
         let _ = handler;
         panic!("This method is not usable inside the canister.")
@@ -37,7 +37,7 @@ macro_rules! _ic0_module_ret {
 macro_rules! ic0_module {
     ( $(     ic0. $name: ident : ( $( $argname: ident : $argtype: ty ),* ) -> $rettype: tt ; )+ ) => {
         #[allow(improper_ctypes)]
-        #[cfg(target_arch = "wasm32")]
+        #[cfg(target_family = "wasm")]
         #[link(wasm_import_module = "ic0")]
         extern "C" {
             $(pub fn $name($( $argname: $argtype, )*) -> _ic0_module_ret!($rettype) ;)*
@@ -52,7 +52,7 @@ macro_rules! ic0_module {
 
         /// The runtime module provides the tools to have the canister in one thread and communicate
         /// with another handler on another thread.
-        #[cfg(feature = "runtime")]
+        #[cfg(all(feature = "runtime", not(target_family = "wasm")))]
         pub mod runtime {
             use futures::executor::block_on;
             use super::Ic0CallHandler;
@@ -213,7 +213,7 @@ macro_rules! ic0_module {
         }
 
         $(
-        #[cfg(not(target_arch = "wasm32"))]
+        #[cfg(not(target_family = "wasm"))]
         pub unsafe fn $name($( $argname: $argtype, )*) -> _ic0_module_ret!($rettype) {
             HANDLER.with(|handler| {
                 std::cell::RefMut::map(handler.borrow_mut(), |h| {

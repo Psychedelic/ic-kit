@@ -1,27 +1,23 @@
 mod futures;
 mod setup;
 
-/// APIs/Methods to work with the Internet Computer.
+/// System APIs for the Internet Computer.
 pub mod ic;
-/// The APIs for StableReader/StableWriter.
-// pub mod stable;
-/// Internal storage abstraction for singletons.
+
+/// Easy to use and secure methods to manage the canister's global state.
 pub mod storage;
+
+/// Helper methods around the stable storage.
+pub mod stable;
+
+/// Internal utility methods to deal with reading data.
+pub mod utils;
 
 // re-exports.
 pub use candid::{self, CandidType, Principal};
-pub use futures::CallFuture;
-pub use ic_cdk::api::call::{CallResult, RejectionCode};
 pub use ic_kit_macros as macros;
-pub use ic_kit_runtime as rt;
 pub use setup::setup_hooks;
 
-/// ic_cdk APIs to be used with ic-kit-macros only, please don't use this directly
-/// we may decide to change it anytime and break compatability.
-pub mod ic_call_api_v0_ {
-    pub use ic_cdk::api::call::arg_data;
-    pub use ic_cdk::api::call::reject;
-    pub use ic_cdk::api::call::reply;
-}
-
-pub use ic_cdk::api::stable::StableMemoryError;
+/// The IC-kit runtime, which can be used for testing the canister in non-wasm environments.
+#[cfg(not(target_family = "wasm"))]
+pub use ic_kit_runtime as rt;

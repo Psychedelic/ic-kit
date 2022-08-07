@@ -1,8 +1,10 @@
 use crate::ic;
 use std::panic;
 
+#[cfg(target_family = "wasm")]
 static mut DONE: bool = false;
 
+#[cfg(target_family = "wasm")]
 pub fn setup_hooks() {
     unsafe {
         if DONE {
@@ -14,8 +16,13 @@ pub fn setup_hooks() {
     set_panic_hook();
 }
 
+#[cfg(not(target_family = "wasm"))]
+pub fn setup_hooks() {
+    set_panic_hook();
+}
+
 /// Sets a custom panic hook, uses debug.trace
-pub fn set_panic_hook() {
+fn set_panic_hook() {
     panic::set_hook(Box::new(|info| {
         let file = info.location().unwrap().file();
         let line = info.location().unwrap().line();

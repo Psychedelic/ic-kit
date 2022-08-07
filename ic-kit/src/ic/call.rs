@@ -1,14 +1,13 @@
 use crate::futures;
 use crate::futures::CallFuture;
+use crate::ic::Cycles;
+use crate::utils::arg_data_raw;
 use candid::utils::{ArgumentDecoder, ArgumentEncoder};
 use candid::{decode_args, encode_args, encode_one, CandidType, Principal};
-
 use ic_kit_sys::ic0;
 use serde::Deserialize;
-
 use std::error;
 use std::fmt;
-use std::fmt::Write;
 
 /// The result of `candid::encode_args(())` which is used as the default argument.
 pub const CANDID_EMPTY_ARG: &[u8] = &[68, 73, 68, 76, 0, 0];
@@ -18,8 +17,7 @@ pub const CANDID_EMPTY_ARG: &[u8] = &[68, 73, 68, 76, 0, 0];
 pub struct CallBuilder {
     canister_id: Principal,
     method_name: String,
-    payment: u128,
-    /// default = vec![68, 73, 68, 76, 0, 0],
+    payment: Cycles,
     arg: Option<Vec<u8>>,
 }
 
@@ -147,7 +145,7 @@ impl CallBuilder {
         self.arg = None;
     }
 
-    /// Set the payment amount for the canister. THis will override any previously added cycles
+    /// Set the payment amount for the canister. This will overwrite any previously added cycles
     /// to this call, use `add_payment` if you want to increment the amount of used cycles in
     /// this call.
     ///
@@ -156,20 +154,24 @@ impl CallBuilder {
     /// Be sure that your canister has the provided amount of cycles upon performing the call,
     /// since any of the perform methods will just trap the canister if the provided payment
     /// amount is larger than the amount of canister's balance.
-    pub fn with_payment(mut self, payment: u128) -> Self {
-        self.payment += payment;
+    pub fn with_payment(mut self, payment: Cycles) -> Self {
+        self.payment = payment;
         self
     }
 
     /// Add the given provided amount of cycles to the cycles already provided to this call.
-    pub fn add_payment(mut self, payment: u128) -> Self {
+    pub fn add_payment(mut self, payment: Cycles) -> Self {
         self.payment += payment;
         self
     }
 
     /// Should be called after the `ic0::call_new` to set the call arguments.
     #[inline(always)]
-    unsafe fn perform_internal_set_state(&self) -> i32 {
+    unsafe fn ic0_internal_call_perform(&self) -> i32 {
+        #[cfg(not(feature = "experimental-cycles128"))]
+        ic0::call_cycles_add(self.payment as i64);
+
+        #[cfg(feature = "experimental-cycles128")]
         if self.payment > 0 && self.payment < (u64::MAX as u128) {
             ic0::call_cycles_add(self.payment as i64);
         } else if self.payment > 0 {
@@ -178,7 +180,7 @@ impl CallBuilder {
             ic0::call_cycles_add128(high as i64, low as i64);
         }
 
-        let args_raw = self.arg.as_deref().unwrap_or_else(|| CANDID_EMPTY_ARG);
+        let args_raw = self.arg.as_deref().unwrap_or(CANDID_EMPTY_ARG);
 
         if !args_raw.is_empty() {
             ic0::call_data_append(args_raw.as_ptr() as isize, args_raw.len() as isize);
@@ -188,7 +190,7 @@ impl CallBuilder {
     }
 
     /// Perform a call when you do not care about the response in anyway. We advise you to use this
-    /// method when you can since it is both probably cheaper.
+    /// method when you can since it is probably cheaper.
     ///
     /// # Traps
     ///
@@ -210,7 +212,7 @@ impl CallBuilder {
                 -1,
             );
 
-            self.perform_internal_set_state();
+            self.ic0_internal_call_perform();
         }
     }
 
@@ -224,7 +226,7 @@ impl CallBuilder {
     fn perform_internal(&self) -> CallFuture {
         let future = unsafe {
             let future = futures::call_new(self.canister_id, self.method_name.as_str());
-            let e_code = self.perform_internal_set_state();
+            let e_code = self.ic0_internal_call_perform();
 
             if e_code != 0 {
                 future.mark_ready()
@@ -302,19 +304,4 @@ impl CallBuilder {
             Ok(r) => Ok(r),
         }
     }
-}
-
-fn arg_data_raw() -> Vec<u8> {
-    unsafe {
-        let len: usize = ic0::msg_arg_data_size() as usize;
-        let mut bytes = Vec::with_capacity(len);
-        ic0::msg_arg_data_copy(bytes.as_mut_ptr() as isize, 0, len as isize);
-        bytes.set_len(len);
-        bytes
-    }
-}
-
-#[test]
-fn x() {
-    println!("{:?}", encode_args(()));
 }

@@ -53,25 +53,3 @@ pub fn take<T: 'static>() -> Option<T> {
 pub fn swap<T: 'static>(value: T) -> Option<T> {
     STORAGE.with(|cell| cell.borrow_mut().swap(value))
 }
-
-mod future {
-
-    #[test]
-    fn play() {
-        let (tx, rx) = oneshot::channel();
-
-        let x = spawn(async {
-            println!("Hello!");
-            rx.await.unwrap();
-            println!("Hey!");
-        });
-
-        println!("Run!");
-        run(Some(x.task()));
-
-        tx.send(()).unwrap();
-
-        println!("Run!");
-        run(Some(x.task()));
-    }
-}

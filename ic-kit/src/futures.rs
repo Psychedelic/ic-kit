@@ -133,7 +133,7 @@ struct CallFutureState {
 }
 
 /// A simple state-less future that is resolved when any of the call's callbacks are called.
-pub struct CallFuture {
+pub(crate) struct CallFuture {
     // We basically use Rc instead of Arc (since we're single threaded), and use
     // RefCell instead of Mutex (because we cannot lock in WASM).
     state: WasmCell<CallFutureState>,
@@ -172,7 +172,7 @@ impl CallFuture {
 
 /// Perform a ic0::call_new and return the call future for it. Additionally this method invokes
 /// the `ic0::call_on_cleanup` to set the future cleanup method.
-pub unsafe fn call_new(canister_id: Principal, method: &str) -> CallFuture {
+pub(crate) unsafe fn call_new(canister_id: Principal, method: &str) -> CallFuture {
     let callee = canister_id.as_slice();
     let state = WasmCell::new(CallFutureState {
         ready: false,
@@ -253,6 +253,7 @@ fn cleanup(state_ptr: *const InnerCell<CallFutureState>) {
 /// API requires us to pass one thin pointer, while a a pointer to a `dyn Trait`
 /// can only be fat. So we create one additional thin pointer, pointing to the
 /// fat pointer and pass it instead.
+#[inline]
 pub fn spawn<F: 'static + Future<Output = ()>>(future: F) {
     let future_ptr = Box::into_raw(Box::new(future));
     let future_ptr_ptr: *mut *mut dyn Future<Output = ()> = Box::into_raw(Box::new(future_ptr));
@@ -289,10 +290,12 @@ mod waker {
 
     static MY_VTABLE: RawWakerVTable = RawWakerVTable::new(clone, wake, wake_by_ref, drop);
 
+    #[inline(always)]
     fn raw_waker(ptr: *const ()) -> RawWaker {
         RawWaker::new(ptr, &MY_VTABLE)
     }
 
+    #[inline(always)]
     fn clone(ptr: *const ()) -> RawWaker {
         raw_waker(ptr)
     }
@@ -303,6 +306,7 @@ mod waker {
     // is pending, we leave it on the heap. If it's ready, we deallocate the
     // pointer. If CLEANUP is set, then we're recovering from a callback trap, and
     // want to drop the future without executing any more of it.
+    #[inline(always)]
     unsafe fn wake(ptr: *const ()) {
         let boxed_future_ptr_ptr = Box::from_raw(ptr as *mut FuturePtr);
         let future_ptr: FuturePtr = *boxed_future_ptr_ptr;
@@ -319,10 +323,13 @@ mod waker {
         }
     }
 
+    #[inline(always)]
     fn wake_by_ref(_: *const ()) {}
 
+    #[inline(always)]
     fn drop(_: *const ()) {}
 
+    #[inline(always)]
     pub fn waker(ptr: *const ()) -> Waker {
         unsafe { Waker::from_raw(raw_waker(ptr)) }
     }

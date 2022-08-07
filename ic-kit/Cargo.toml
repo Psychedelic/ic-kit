@@ -15,12 +15,12 @@ include = ["src", "Cargo.toml", "README.md"]
 [dependencies]
 ic-kit-sys = {path="../ic-kit-sys", version="0.1.0"}
 ic-kit-macros = {path="../ic-kit-macros", version="0.1.0"}
-ic-kit-runtime = {path="../ic-kit-runtime", version="0.0.1"}
-serde = "1.0"
-wasm-rs-async-executor = "0.9.0"
-tokio = {version="1.20", features=["sync", "macros"]}
-ic-cdk = "0.5.5"
 candid="0.7"
+serde = "1.0"
 
-[patch.crates-io]
-num-bigint = { git = "https://github.com/rust-num/num-bigint" }
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
+ic-kit-runtime = {path="../ic-kit-runtime", version="0.0.1"}
+
+[features]
+experimental-stable64 = []
+experimental-cycles128 = []

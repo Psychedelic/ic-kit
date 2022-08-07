@@ -10,3 +10,6 @@ members = [
 [profile.release]
 lto = true
 opt-level = 'z'
+
+[patch.crates-io]
+num-bigint = { git = "https://github.com/rust-num/num-bigint" }

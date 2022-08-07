@@ -1,6 +1,6 @@
 use crate::types::{
     CanisterId, CanisterReply, EntryMode, Env, IncomingRequestId, Message, OutgoingRequestId,
-    RejectionCode, RequestId,
+    RejectionCode,
 };
 use futures::executor::block_on;
 use ic_kit_sys::ic0;
@@ -8,7 +8,7 @@ use ic_kit_sys::ic0::runtime;
 use ic_kit_sys::ic0::runtime::Ic0CallHandlerProxy;
 use ic_types::Principal;
 use std::any::Any;
-use std::cmp::min;
+
 use std::collections::HashMap;
 use std::panic::{catch_unwind, RefUnwindSafe};
 use std::thread::JoinHandle;
@@ -116,7 +116,7 @@ impl Canister {
             // - No message such as "thread panic during test" in the terminal.
             // - TODO: Capture the panic location.
             // let panic_hook_tx = task_completion_tx.clone();
-            set_hook(Box::new(move |m| {}));
+            set_hook(Box::new(move |_m| {}));
 
             block_on(async {
                 while let Some(task) = task_rx.recv().await {
@@ -180,7 +180,7 @@ impl Canister {
     pub async fn process_message(&mut self, _message: Message) {
         // make sure we clean the task_returned receiver. since we may have sent more than one
         // completion signal from previous task.
-        while let Ok(_) = self.task_completion_rx.try_recv() {}
+        while self.task_completion_rx.try_recv().is_ok() {}
 
         self.task_tx
             .send(Box::new(|| {
@@ -235,7 +235,7 @@ impl Ic0CallHandlerProxy for Canister {
             | EntryMode::ReplyCallback
             | EntryMode::InspectMessage => {
                 let data = self.env.args.as_slice();
-                copy_to_canister(dst, offset, size, &data)?;
+                copy_to_canister(dst, offset, size, data)?;
                 Ok(())
             }
             _ => Err(format!(
@@ -271,7 +271,7 @@ impl Ic0CallHandlerProxy for Canister {
             | EntryMode::Query
             | EntryMode::InspectMessage => {
                 let data = self.env.sender.as_slice();
-                copy_to_canister(dst, offset, size, &data)?;
+                copy_to_canister(dst, offset, size, data)?;
                 Ok(())
             }
             _ => Err(format!(
@@ -344,9 +344,7 @@ impl Ic0CallHandlerProxy for Canister {
         };
 
         if !self.msg_reply_senders.contains_key(&message_id) {
-            return Err(format!(
-                "msg_reply_data_append may only be invoked before canister responses."
-            ));
+            return Err("msg_reply_data_append may only be invoked before canister responses.".to_string());
         }
 
         let reply_data = self.msg_reply_data.entry(message_id).or_default();
@@ -377,7 +375,7 @@ impl Ic0CallHandlerProxy for Canister {
         let reply_chan = self
             .msg_reply_senders
             .remove(&message_id)
-            .ok_or_else(|| format!("msg_reply may only be invoked before canister responses."))?;
+            .ok_or_else(|| "msg_reply may only be invoked before canister responses.".to_string())?;
 
         let data = self.msg_reply_data.remove(&message_id).unwrap_or_default();
         let cycles_refunded = self.env.cycles_available;
@@ -414,7 +412,7 @@ impl Ic0CallHandlerProxy for Canister {
         let reply_chan = self
             .msg_reply_senders
             .remove(&message_id)
-            .ok_or_else(|| format!("msg_reject may only be invoked before canister responses."))?;
+            .ok_or_else(|| "msg_reject may only be invoked before canister responses.".to_string())?;
 
         // we don't care about the data anymore.
         self.msg_reply_data.remove(&message_id);
@@ -441,7 +439,7 @@ impl Ic0CallHandlerProxy for Canister {
             | EntryMode::ReplyCallback
             | EntryMode::RejectCallback => {
                 if self.env.cycles_available > (u64::MAX as u128) {
-                    return Err(format!("available cycles does not fit in u64"));
+                    return Err("available cycles does not fit in u64".to_string());
                 }
 
                 Ok(self.env.cycles_available as u64 as i64)
@@ -474,7 +472,7 @@ impl Ic0CallHandlerProxy for Canister {
         match self.env.entry_mode {
             EntryMode::CustomTask | EntryMode::ReplyCallback | EntryMode::RejectCallback => {
                 if self.env.cycles_refunded > (u64::MAX as u128) {
-                    return Err(format!("refunded cycles does not fit in u64"));
+                    return Err("refunded cycles does not fit in u64".to_string());
                 }
 
                 Ok(self.env.cycles_refunded as u64 as i64)
@@ -572,7 +570,7 @@ impl Ic0CallHandlerProxy for Canister {
         todo!()
     }
 
-    fn canister_cycle_balance128(&mut self, dst: isize) -> Result<(), String> {
+    fn canister_cycle_balance128(&mut self, _dst: isize) -> Result<(), String> {
         todo!()
     }
 
@@ -586,9 +584,9 @@ impl Ic0CallHandlerProxy for Canister {
 
     fn msg_method_name_copy(
         &mut self,
-        dst: isize,
-        offset: isize,
-        size: isize,
+        _dst: isize,
+        _offset: isize,
+        _size: isize,
     ) -> Result<(), String> {
         todo!()
     }
@@ -599,31 +597,31 @@ impl Ic0CallHandlerProxy for Canister {
 
     fn call_new(
         &mut self,
-        callee_src: isize,
-        callee_size: isize,
-        name_src: isize,
-        name_size: isize,
-        reply_fun: isize,
-        reply_env: isize,
-        reject_fun: isize,
-        reject_env: isize,
+        _callee_src: isize,
+        _callee_size: isize,
+        _name_src: isize,
+        _name_size: isize,
+        _reply_fun: isize,
+        _reply_env: isize,
+        _reject_fun: isize,
+        _reject_env: isize,
     ) -> Result<(), String> {
         todo!()
     }
 
-    fn call_on_cleanup(&mut self, fun: isize, env: isize) -> Result<(), String> {
+    fn call_on_cleanup(&mut self, _fun: isize, _env: isize) -> Result<(), String> {
         todo!()
     }
 
-    fn call_data_append(&mut self, src: isize, size: isize) -> Result<(), String> {
+    fn call_data_append(&mut self, _src: isize, _size: isize) -> Result<(), String> {
         todo!()
     }
 
-    fn call_cycles_add(&mut self, amount: i64) -> Result<(), String> {
+    fn call_cycles_add(&mut self, _amount: i64) -> Result<(), String> {
         todo!()
     }
 
-    fn call_cycles_add128(&mut self, amount_high: i64, amount_low: i64) -> Result<(), String> {
+    fn call_cycles_add128(&mut self, _amount_high: i64, _amount_low: i64) -> Result<(), String> {
         todo!()
     }
 
@@ -635,15 +633,15 @@ impl Ic0CallHandlerProxy for Canister {
         todo!()
     }
 
-    fn stable_grow(&mut self, new_pages: i32) -> Result<i32, String> {
+    fn stable_grow(&mut self, _new_pages: i32) -> Result<i32, String> {
         todo!()
     }
 
-    fn stable_write(&mut self, offset: i32, src: isize, size: isize) -> Result<(), String> {
+    fn stable_write(&mut self, _offset: i32, _src: isize, _size: isize) -> Result<(), String> {
         todo!()
     }
 
-    fn stable_read(&mut self, dst: isize, offset: i32, size: isize) -> Result<(), String> {
+    fn stable_read(&mut self, _dst: isize, _offset: i32, _size: isize) -> Result<(), String> {
         todo!()
     }
 
@@ -651,19 +649,19 @@ impl Ic0CallHandlerProxy for Canister {
         todo!()
     }
 
-    fn stable64_grow(&mut self, new_pages: i64) -> Result<i64, String> {
+    fn stable64_grow(&mut self, _new_pages: i64) -> Result<i64, String> {
         todo!()
     }
 
-    fn stable64_write(&mut self, offset: i64, src: i64, size: i64) -> Result<(), String> {
+    fn stable64_write(&mut self, _offset: i64, _src: i64, _size: i64) -> Result<(), String> {
         todo!()
     }
 
-    fn stable64_read(&mut self, dst: i64, offset: i64, size: i64) -> Result<(), String> {
+    fn stable64_read(&mut self, _dst: i64, _offset: i64, _size: i64) -> Result<(), String> {
         todo!()
     }
 
-    fn certified_data_set(&mut self, src: isize, size: isize) -> Result<(), String> {
+    fn certified_data_set(&mut self, _src: isize, _size: isize) -> Result<(), String> {
         todo!()
     }
 
@@ -677,9 +675,9 @@ impl Ic0CallHandlerProxy for Canister {
 
     fn data_certificate_copy(
         &mut self,
-        dst: isize,
-        offset: isize,
-        size: isize,
+        _dst: isize,
+        _offset: isize,
+        _size: isize,
     ) -> Result<(), String> {
         todo!()
     }
@@ -688,15 +686,15 @@ impl Ic0CallHandlerProxy for Canister {
         todo!()
     }
 
-    fn performance_counter(&mut self, counter_type: i32) -> Result<i64, String> {
+    fn performance_counter(&mut self, _counter_type: i32) -> Result<i64, String> {
         todo!()
     }
 
-    fn debug_print(&mut self, src: isize, size: isize) -> Result<(), String> {
+    fn debug_print(&mut self, _src: isize, _size: isize) -> Result<(), String> {
         todo!()
     }
 
-    fn trap(&mut self, src: isize, size: isize) -> Result<(), String> {
+    fn trap(&mut self, _src: isize, _size: isize) -> Result<(), String> {
         todo!()
     }
 }
