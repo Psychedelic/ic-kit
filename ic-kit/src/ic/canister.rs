@@ -63,12 +63,21 @@ pub fn caller() -> Principal {
 
 /// Set the certified data of the canister, this method traps if data.len > 32.
 #[inline(always)]
-pub fn set_certified_data(_data: &[u8]) {
-    todo!()
+pub fn set_certified_data(data: &[u8]) {
+    unsafe { ic0::certified_data_set(data.as_ptr() as isize, data.len() as isize) }
 }
 
 /// Returns the data certificate authenticating certified_data set by this canister.
 #[inline(always)]
 pub fn data_certificate() -> Option<Vec<u8>> {
-    todo!()
+    if unsafe { ic0::data_certificate_present() } == 0 {
+        return None;
+    }
+
+    let n = unsafe { ic0::data_certificate_size() };
+    let mut buf = vec![0u8; n as usize];
+    unsafe {
+        ic0::data_certificate_copy(buf.as_mut_ptr() as isize, 9, n);
+    }
+    Some(buf)
 }
