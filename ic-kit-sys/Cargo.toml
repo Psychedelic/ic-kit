@@ -16,7 +16,3 @@ include = ["src", "Cargo.toml", "README.md"]
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 tokio = {version="1.20", features=["sync"], optional=true}
 futures = {version="0.3", optional=true}
-
-[features]
-default = ["runtime"]
-runtime = ["tokio", "futures"]

@@ -1,11 +1,10 @@
 /// Provides utility methods to deal with stable storage on your canister.
 // This file is copied from ic_cdk, but changed so that it works with IC-Kit.
 use crate::ic::{
-    stable_grow, stable_read, stable_size, stable_write, StableMemoryError, StableSize,
+    stable_bytes, stable_grow, stable_read, stable_size, stable_write, StableMemoryError,
+    StableSize,
 };
 use candid::utils::{ArgumentDecoder, ArgumentEncoder};
-
-
 use std::io;
 
 /// A writer to the stable memory.
@@ -113,20 +112,30 @@ impl io::Read for StableReader {
 }
 
 /// Store the given data to the stable storage.
-#[inline(always)]
-pub fn stable_store<T>(_data: T) -> Result<(), candid::Error>
+#[deprecated(
+    since = "0.5.0",
+    note = "This is a non-performant legacy from IC-CDK for us to deal with."
+)]
+pub fn stable_store<T>(data: T) -> Result<(), candid::Error>
 where
     T: ArgumentEncoder,
 {
-    todo!()
+    candid::write_args(&mut StableWriter::default(), data)
 }
 
 /// Restore the data from the stable storage. If the data is not already stored the None value
 /// is returned.
-#[inline(always)]
+#[deprecated(
+    since = "0.5.0",
+    note = "This is a non-performant legacy from IC-CDK for us to deal with."
+)]
 pub fn stable_restore<T>() -> Result<T, String>
 where
     T: for<'de> ArgumentDecoder<'de>,
 {
-    todo!()
+    let bytes = stable_bytes();
+    let mut de =
+        candid::de::IDLDeserialize::new(bytes.as_slice()).map_err(|e| format!("{:?}", e))?;
+    let res = ArgumentDecoder::decode(&mut de).map_err(|e| format!("{:?}", e))?;
+    Ok(res)
 }

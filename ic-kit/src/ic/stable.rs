@@ -1,4 +1,3 @@
-
 use ic_kit_sys::ic0;
 use std::error;
 use std::fmt;
@@ -111,4 +110,14 @@ pub fn stable_read(offset: StableSize, buf: &mut [u8]) {
             ic0::stable64_read(buf.as_ptr() as i64, offset as i64, buf.len() as i64);
         }
     }
+}
+
+pub(crate) fn stable_bytes() -> Vec<u8> {
+    let size = (stable_size() as usize) << 16;
+    let mut vec = Vec::with_capacity(size);
+    unsafe {
+        ic0::stable_read(vec.as_ptr() as isize, 0, size as isize);
+        vec.set_len(size);
+    }
+    vec
 }

@@ -6,17 +6,11 @@ thread_local!(static HANDLER: std::cell::RefCell<Option<Box<dyn Ic0CallHandler>>
 /// # Panics
 ///
 /// If called from within a canister.
+#[cfg(not(target_family = "wasm"))]
 pub fn register_handler<H: Ic0CallHandler + 'static>(handler: H) {
-    #[cfg(not(target_family = "wasm"))]
     HANDLER.with(|c| {
         let _ = c.borrow_mut().insert(Box::new(handler));
     });
-
-    #[cfg(target_family = "wasm")]
-    {
-        let _ = handler;
-        panic!("This method is not usable inside the canister.")
-    }
 }
 
 macro_rules! _ic0_module_ret {
@@ -44,6 +38,7 @@ macro_rules! ic0_module {
         }
 
         /// An object that implements mock handlers for ic0 WASM API calls.
+        #[cfg(not(target_family = "wasm"))]
         pub trait Ic0CallHandler {
             $(
             fn $name(&mut self, $($argname: $argtype,)*) -> _ic0_module_ret!($rettype);
@@ -52,7 +47,7 @@ macro_rules! ic0_module {
 
         /// The runtime module provides the tools to have the canister in one thread and communicate
         /// with another handler on another thread.
-        #[cfg(all(feature = "runtime", not(target_family = "wasm")))]
+        #[cfg(not(target_family = "wasm"))]
         pub mod runtime {
             use futures::executor::block_on;
             use super::Ic0CallHandler;
@@ -228,6 +223,8 @@ macro_rules! ic0_module {
 
 // Copy-paste the spec section of the API here.
 // https://github.com/dfinity/interface-spec/blob/master/spec/ic0.txt
+// But change any i32 which is an address space to an isize, so we can work with this even when
+// on 64bit non-wasm runtimes.
 //
 // The comment after each function lists from where these functions may be invoked:
 // I: from canister_init or canister_post_upgrade

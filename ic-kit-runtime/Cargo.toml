@@ -13,7 +13,7 @@ include = ["src", "Cargo.toml", "README.md"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [dependencies]
-ic-kit-sys = {path="../ic-kit-sys", version="0.1.1", features=["runtime"]}
+ic-kit-sys = {path="../ic-kit-sys", version="0.1.1"}
 ic-types = "0.4.1"
 tokio = {version="1.20", features=["sync", "macros"]}
 thread-local-panic-hook = "0.1.0"
