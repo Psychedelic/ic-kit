@@ -175,9 +175,9 @@ impl CallBuilder {
         if self.payment > 0 && self.payment < (u64::MAX as u128) {
             ic0::call_cycles_add(self.payment as i64);
         } else if self.payment > 0 {
-            let high = (self.payment >> 64) as u64;
-            let low = (self.payment & u64::MAX as u128) as u64;
-            ic0::call_cycles_add128(high as i64, low as i64);
+            let high = (self.payment >> 64) as u64 as i64;
+            let low = (self.payment & (1 << 64)) as u64 as i64;
+            ic0::call_cycles_add128(high, low);
         }
 
         let args_raw = self.arg.as_deref().unwrap_or(CANDID_EMPTY_ARG);

@@ -39,11 +39,11 @@ pub fn msg_cycles_accept(max_amount: Cycles) -> Cycles {
             return unsafe { ic0::msg_cycles_accept(max_amount as i64) as u128 };
         }
 
-        let high = (max_amount >> 64) as u64;
-        let low = (max_amount & u64::MAX as u128) as u64;
+        let high = (max_amount >> 64) as u64 as i64;
+        let low = (max_amount & (1 << 64)) as u64 as i64;
         let mut recv = 0u128;
         unsafe {
-            ic0::msg_cycles_accept128(high as i64, low as i64, &mut recv as *mut u128 as isize);
+            ic0::msg_cycles_accept128(high, low, &mut recv as *mut u128 as isize);
         }
         u128::from_le(recv)
     }

@@ -1,14 +1,10 @@
-use crate::types::{
-    CanisterId, CanisterReply, EntryMode, Env, IncomingRequestId, Message, OutgoingRequestId,
-    RejectionCode,
-};
+use crate::types::*;
 use futures::executor::block_on;
 use ic_kit_sys::ic0;
 use ic_kit_sys::ic0::runtime;
 use ic_kit_sys::ic0::runtime::Ic0CallHandlerProxy;
 use ic_types::Principal;
 use std::any::Any;
-
 use std::collections::HashMap;
 use std::panic::{catch_unwind, RefUnwindSafe};
 use std::thread::JoinHandle;
@@ -16,6 +12,10 @@ use thread_local_panic_hook::set_hook;
 use tokio::select;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::sync::oneshot;
+
+const MAX_CYCLES_PER_RESPONSE: u128 = 12;
+
+const DEFAULT_PROVISIONAL_CYCLES_BALANCE: u128 = 100_000_000_000_000;
 
 /// A canister that is being executed.
 pub struct Canister {
@@ -42,6 +42,12 @@ pub struct Canister {
     env: Env,
     /// The request id of the current incoming message.
     request_id: Option<IncomingRequestId>,
+    /// The calls that are finalized and should be sent after this entry point's successful
+    /// execution.
+    call_queue: Vec<(Principal, String, RequestCallbacks, u128, Vec<u8>)>,
+    /// The current call under construction, once call_perform is called, this will go into
+    /// the call_queue to be performed later on.
+    pending_call: Option<(Principal, String, RequestCallbacks, u128, Vec<u8>)>,
     /// The thread in which the canister is being executed at.
     execution_thread_handle: JoinHandle<()>,
     /// The communication channel to send tasks to the execution thread.
@@ -141,7 +147,7 @@ impl Canister {
 
         Self {
             canister_id: Vec::from(Principal::from(canister_id).as_slice()),
-            balance: 100_000_000_000_000,
+            balance: DEFAULT_PROVISIONAL_CYCLES_BALANCE,
             symbol_table: HashMap::new(),
             msg_reply_data: HashMap::new(),
             msg_reply_senders: HashMap::new(),
@@ -150,6 +156,8 @@ impl Canister {
             outgoing_calls: HashMap::new(),
             env: Env::default(),
             request_id: None,
+            call_queue: Vec::with_capacity(8),
+            pending_call: None,
             execution_thread_handle,
             task_tx,
             task_completion_rx,
@@ -177,10 +185,21 @@ impl Canister {
         self
     }
 
-    pub async fn process_message(&mut self, _message: Message) {
+    pub async fn process_message(&mut self, message: Message) {
         // make sure we clean the task_returned receiver. since we may have sent more than one
         // completion signal from previous task.
         while self.task_completion_rx.try_recv().is_ok() {}
+        while self.request_rx.try_recv().is_ok() {}
+
+        // Force reset the state.
+        self.discard_pending_call();
+        self.discard_call_queue();
+        self.request_id = None;
+
+        match message {
+            Message::CustomTask { .. } => {}
+            Message::Request { .. } => {}
+        }
 
         self.task_tx
             .send(Box::new(|| {
@@ -191,11 +210,11 @@ impl Canister {
                 panic!("ic-kit-runtime: Could not send the task to the execution thread.")
             });
 
-        loop {
+        let completion: Completion = loop {
             select! {
-                Some(_c) = self.task_completion_rx.recv() => {
-                    // Okay the task returned successfully, we can give up.
-                    return;
+                Some(c) = self.task_completion_rx.recv() => {
+                    // We got the completion signal, which means the task finished execution.
+                    break c;
                 },
                 Some(req) = self.request_rx.recv() => {
                     let res = req.proxy(self);
@@ -205,6 +224,31 @@ impl Canister {
                         .expect("ic-kit-runtime: Could not send the system API call's response to the execution thread.");
                 }
             }
+        };
+
+        // Discard the pending call regardless of the completion status.
+        self.discard_pending_call();
+
+        match completion {
+            Completion::Panicked(m) => {
+                // We panicked, so we don't want to send any of the outgoing messages.
+                self.discard_call_queue();
+            }
+            _ => {}
+        }
+
+        self.discard_pending_call();
+    }
+
+    fn discard_pending_call(&mut self) {
+        if let Some(pending_call) = self.pending_call.take() {
+            self.balance += MAX_CYCLES_PER_RESPONSE + pending_call.3;
+        }
+    }
+
+    fn discard_call_queue(&mut self) {
+        while let Some(pending_call) = self.call_queue.pop() {
+            self.balance += MAX_CYCLES_PER_RESPONSE + pending_call.3;
         }
     }
 }
@@ -544,8 +588,9 @@ impl Ic0CallHandlerProxy for Canister {
             }
         };
 
-        let max_amount =
-            (max_amount_high as u128) + (max_amount_low as u128) * (u64::MAX as u128 + 1);
+        let high = max_amount_high as u128;
+        let low = max_amount_low as u128;
+        let max_amount = high << 64 + low;
         let amount = self.env.cycles_available.min(max_amount);
         self.env.cycles_available -= amount;
         self.cycles_accepted += amount;
@@ -567,66 +612,211 @@ impl Ic0CallHandlerProxy for Canister {
     }
 
     fn canister_cycle_balance(&mut self) -> Result<i64, String> {
-        todo!()
+        let balance = self.balance + self.cycles_accepted;
+
+        if balance > (u64::MAX as u128) {
+            return Err("refunded cycles does not fit in u64".to_string());
+        }
+
+        Ok(balance as u64 as i64)
     }
 
-    fn canister_cycle_balance128(&mut self, _dst: isize) -> Result<(), String> {
-        todo!()
+    fn canister_cycle_balance128(&mut self, dst: isize) -> Result<(), String> {
+        let balance = self.balance + self.cycles_accepted;
+        let data = balance.to_le_bytes();
+        copy_to_canister(dst, 0, 16, &data)?;
+        Ok(())
     }
 
     fn canister_status(&mut self) -> Result<i32, String> {
-        todo!()
+        // TODO(qti3e) support stopping canisters.
+        Ok(1)
     }
 
     fn msg_method_name_size(&mut self) -> Result<isize, String> {
-        todo!()
+        let method_name = match self.env.entry_mode {
+            EntryMode::CustomTask | EntryMode::InspectMessage => self
+                .env
+                .method_name
+                .as_ref()
+                .expect("ic-kit-runtime: Method name is not set.")
+                .as_bytes(),
+            _ => {
+                return Err(format!(
+                    "msg_method_name_size can not be called from '{}'",
+                    self.env.get_entry_point_name()
+                ))
+            }
+        };
+
+        Ok(method_name.len() as isize)
     }
 
     fn msg_method_name_copy(
         &mut self,
-        _dst: isize,
-        _offset: isize,
-        _size: isize,
+        dst: isize,
+        offset: isize,
+        size: isize,
     ) -> Result<(), String> {
-        todo!()
+        let method_name = match self.env.entry_mode {
+            EntryMode::CustomTask | EntryMode::InspectMessage => self
+                .env
+                .method_name
+                .as_ref()
+                .expect("ic-kit-runtime: Method name is not set.")
+                .as_bytes(),
+            _ => {
+                return Err(format!(
+                    "msg_method_name_copy can not be called from '{}'",
+                    self.env.get_entry_point_name()
+                ))
+            }
+        };
+
+        copy_to_canister(dst, offset, size, method_name)?;
+        Ok(())
     }
 
     fn accept_message(&mut self) -> Result<(), String> {
+        // TODO(qti3e) Hmm.. this has room for some thoughts.
         todo!()
     }
 
     fn call_new(
         &mut self,
-        _callee_src: isize,
-        _callee_size: isize,
-        _name_src: isize,
-        _name_size: isize,
-        _reply_fun: isize,
-        _reply_env: isize,
-        _reject_fun: isize,
-        _reject_env: isize,
+        callee_src: isize,
+        callee_size: isize,
+        name_src: isize,
+        name_size: isize,
+        reply_fun: isize,
+        reply_env: isize,
+        reject_fun: isize,
+        reject_env: isize,
     ) -> Result<(), String> {
-        todo!()
+        match self.env.entry_mode {
+            EntryMode::CustomTask
+            | EntryMode::Update
+            | EntryMode::ReplyCallback
+            | EntryMode::RejectCallback
+            | EntryMode::Heartbeat => {}
+            _ => {
+                return Err(format!(
+                    "call_new can not be called from '{}'",
+                    self.env.get_entry_point_name()
+                ))
+            }
+        }
+
+        self.discard_pending_call();
+
+        if self.balance < MAX_CYCLES_PER_RESPONSE {
+            return Err("Insufficient cycles balance to process canister response.".into());
+        }
+
+        self.balance -= MAX_CYCLES_PER_RESPONSE;
+
+        let callee_bytes = copy_from_canister(callee_src, callee_size);
+        let name_bytes = copy_from_canister(name_src, name_size);
+        let callee = Principal::from_slice(callee_bytes);
+        let name = String::from_utf8_lossy(name_bytes).to_string();
+        let callbacks = RequestCallbacks {
+            message_id: self
+                .request_id
+                .expect("ic-kit-runtime: Request ID not set."),
+            reply: (reply_fun, reply_env),
+            reject: (reject_fun, reject_env),
+            cleanup: None,
+        };
+
+        self.pending_call = Some((callee, name, callbacks, 0, Vec::new()));
+
+        Ok(())
     }
 
-    fn call_on_cleanup(&mut self, _fun: isize, _env: isize) -> Result<(), String> {
-        todo!()
+    fn call_on_cleanup(&mut self, fun: isize, env: isize) -> Result<(), String> {
+        if self.pending_call.is_none() {
+            return Err(format!(
+                "call_on_cleanup cannot be called when there is no pending call."
+            ));
+        }
+
+        let cleanup = &mut self.pending_call.as_mut().unwrap().2.cleanup;
+
+        if cleanup.is_some() {
+            return Err(format!("call_on_cleanup cannot be invoked more than once."));
+        }
+
+        *cleanup = Some((fun, env));
+
+        Ok(())
     }
 
-    fn call_data_append(&mut self, _src: isize, _size: isize) -> Result<(), String> {
-        todo!()
+    fn call_data_append(&mut self, src: isize, size: isize) -> Result<(), String> {
+        if self.pending_call.is_none() {
+            return Err(format!(
+                "call_data_append cannot be called when there is no pending call."
+            ));
+        }
+
+        let args = &mut self.pending_call.as_mut().unwrap().4;
+        let bytes = copy_from_canister(src, size);
+        args.extend_from_slice(bytes);
+
+        Ok(())
     }
 
-    fn call_cycles_add(&mut self, _amount: i64) -> Result<(), String> {
-        todo!()
+    fn call_cycles_add(&mut self, amount: i64) -> Result<(), String> {
+        if self.pending_call.is_none() {
+            return Err(format!(
+                "call_cycles_add cannot be called when there is no pending call."
+            ));
+        }
+
+        let amount = amount as u128;
+
+        if self.balance < amount {
+            return Err(format!("Insufficient cycles balance."));
+        }
+
+        self.balance -= amount;
+        self.pending_call.as_mut().unwrap().3 += amount;
+
+        Ok(())
     }
 
-    fn call_cycles_add128(&mut self, _amount_high: i64, _amount_low: i64) -> Result<(), String> {
-        todo!()
+    fn call_cycles_add128(&mut self, amount_high: i64, amount_low: i64) -> Result<(), String> {
+        if self.pending_call.is_none() {
+            return Err(format!(
+                "call_cycles_add128 cannot be called when there is no pending call."
+            ));
+        }
+
+        let high = amount_high as u128;
+        let low = amount_low as u128;
+        let amount = high << 64 + low;
+
+        if self.balance < amount {
+            return Err(format!("Insufficient cycles balance."));
+        }
+
+        self.balance -= amount;
+        self.pending_call.as_mut().unwrap().3 += amount;
+
+        Ok(())
     }
 
     fn call_perform(&mut self) -> Result<i32, String> {
-        todo!()
+        if self.pending_call.is_none() {
+            return Err(format!(
+                "call_cycles_add128 cannot be called when there is no pending call."
+            ));
+        }
+
+        // TODO(qti3e) Implement the freezing threshold + system ability to perform call.
+        // For now all of the calls go through.
+
+        self.call_queue.push(self.pending_call.take().unwrap());
+        Ok(0)
     }
 
     fn stable_size(&mut self) -> Result<i32, String> {
@@ -683,19 +873,24 @@ impl Ic0CallHandlerProxy for Canister {
     }
 
     fn time(&mut self) -> Result<i64, String> {
-        todo!()
+        Ok(self.env.time as i64)
     }
 
     fn performance_counter(&mut self, _counter_type: i32) -> Result<i64, String> {
         todo!()
     }
 
-    fn debug_print(&mut self, _src: isize, _size: isize) -> Result<(), String> {
-        todo!()
+    fn debug_print(&mut self, src: isize, size: isize) -> Result<(), String> {
+        let bytes = copy_from_canister(src, size);
+        let message = String::from_utf8_lossy(bytes).to_string();
+        println!("canister: {}", message);
+        Ok(())
     }
 
-    fn trap(&mut self, _src: isize, _size: isize) -> Result<(), String> {
-        todo!()
+    fn trap(&mut self, src: isize, size: isize) -> Result<(), String> {
+        let bytes = copy_from_canister(src, size);
+        let message = String::from_utf8_lossy(bytes).to_string();
+        Err(format!("Canister trapped: '{}'", message))
     }
 }
 

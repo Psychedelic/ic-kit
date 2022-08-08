@@ -1,6 +1,7 @@
 use ic_types::Principal;
 use std::panic::RefUnwindSafe;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const REQUEST_ID: AtomicU64 = AtomicU64::new(0);
 
@@ -55,6 +56,8 @@ pub struct Env {
     pub rejection_code: RejectionCode,
     /// The rejection message. Only applicable when `rejection_code != 0`
     pub rejection_message: String,
+    /// The current time in nanoseconds.
+    pub time: u64,
 }
 
 /// Rejection code from calling another canister.
@@ -85,6 +88,8 @@ pub enum Message {
     },
     /// A normal IC request to the canister.
     Request {
+        /// The request id of the incoming message.
+        request_id: Option<IncomingRequestId>,
         /// Only applicable if env.entry_mode is a reply/reject callback.
         reply_to: Option<OutgoingRequestId>,
         /// The env to use during the execution of this task.
@@ -117,11 +122,18 @@ impl Default for Env {
             args: vec![],
             rejection_code: RejectionCode::NoError,
             rejection_message: String::new(),
+            time: now(),
         }
     }
 }
 
 impl Env {
+    /// Use the provided time for this env.
+    pub fn with_time(mut self, time: u64) -> Self {
+        self.time = time;
+        self
+    }
+
     /// Use the given entry mode in this env.
     pub fn with_entry_mode(mut self, mode: EntryMode) -> Self {
         self.entry_mode = mode;
@@ -256,4 +268,12 @@ impl CanisterId {
 
         Self(principal)
     }
+}
+
+fn now() -> u64 {
+    let now = SystemTime::now();
+    let unix = now
+        .duration_since(UNIX_EPOCH)
+        .expect("ic-kit-runtime: could not retrieve unix time.");
+    unix.as_nanos() as u64
 }
