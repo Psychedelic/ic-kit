@@ -244,11 +244,14 @@ impl CanisterId {
         let len : u8 = 8 /* the u64 */ + 2 /* the last 0x01 */;
 
         struct PrincipalLayout {
-            len: u8,
-            bytes: [u8; 29],
+            _len: u8,
+            _bytes: [u8; 29],
         }
 
-        let id = PrincipalLayout { len, bytes: data };
+        let id = PrincipalLayout {
+            _len: len,
+            _bytes: data,
+        };
         let principal = unsafe { *((&id as *const PrincipalLayout) as *const Principal) };
 
         Self(principal)

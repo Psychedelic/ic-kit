@@ -142,6 +142,13 @@ pub fn gen_entry_point_code(
         ));
     }
 
+    if attrs.guard.is_some() && entry_point.is_lifecycle() {
+        return Err(Error::new(
+            Span::call_site(),
+            format!("#[{}] function cannot have a guard", entry_point),
+        ));
+    }
+
     if is_async && entry_point.is_lifecycle() {
         return Err(Error::new(
             Span::call_site(),

@@ -1,5 +1,4 @@
-use ic_kit::ic;
-use ic_kit::macros::{inspect_message, update};
+use ic_kit::prelude::*;
 
 #[derive(Default)]
 pub struct Counter {
