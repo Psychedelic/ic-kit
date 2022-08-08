@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "dfx": "0.11.0",
+  "canisters": {
+    "counter": {
+      "candid": "samples/counter/src/candid.did",
+      "package": "ic_kit_example_counter",
+      "type": "rust"
+    }
+  },
+  "networks": {
+    "local": {
+      "bind": "127.0.0.1:8000",
+      "type": "ephemeral"
+    }
+  }
+}
+

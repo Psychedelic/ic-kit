@@ -5,7 +5,7 @@ use ic_kit_sys::ic0::runtime;
 use ic_kit_sys::ic0::runtime::Ic0CallHandlerProxy;
 use ic_types::Principal;
 use std::any::Any;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::panic::{catch_unwind, RefUnwindSafe};
 use std::thread::JoinHandle;
 use thread_local_panic_hook::set_hook;
@@ -25,16 +25,25 @@ pub struct Canister {
     balance: u128,
     /// Maps the name of each of exported methods to the task function.
     symbol_table: HashMap<String, Box<dyn Fn() + Send + RefUnwindSafe>>,
-    /// Map each incoming request id the response we're generating for it.
-    msg_reply_data: HashMap<IncomingRequestId, Vec<u8>>,
+    /// The data reply that is being built for the current message. An interesting thing about the
+    /// IC that I did not expect: The reply data is not preserved throughout the async context.
+    /// And the reply is the first call to msg_reply that is inside a non-trapping task.
+    msg_reply_data: Vec<u8>,
     /// Map each incoming request to its response channel, if it is None, it means the
     /// message has already been responded to.
     msg_reply_senders: HashMap<IncomingRequestId, oneshot::Sender<CanisterReply>>,
+    /// The reply for the current call that can be sent via msg_reply_senders channel once the
+    /// current message has been processed without trapping.
+    msg_reply: Option<CanisterReply>,
     /// The amount of available cycles for each incoming request. This is only used
     /// for recovering self.env state for reply callbacks.
     cycles_available_store: HashMap<IncomingRequestId, u128>,
     /// Amount of cycles accept during this message process.
     cycles_accepted: u128,
+    /// Pending outgoing requests that have not been resolved yet. This is used so we know when
+    /// an incoming request is finally finished so we can send the last trapping message as the
+    /// response.
+    pending_outgoing_request_id: HashMap<IncomingRequestId, HashSet<OutgoingRequestId>>,
     /// Map each of the out going requests done by this canister to the callbacks for that
     /// call.
     outgoing_calls: HashMap<OutgoingRequestId, RequestCallbacks>,
@@ -149,10 +158,12 @@ impl Canister {
             canister_id: Vec::from(Principal::from(canister_id).as_slice()),
             balance: DEFAULT_PROVISIONAL_CYCLES_BALANCE,
             symbol_table: HashMap::new(),
-            msg_reply_data: HashMap::new(),
+            msg_reply_data: Vec::new(),
             msg_reply_senders: HashMap::new(),
+            msg_reply: None,
             cycles_available_store: HashMap::new(),
             cycles_accepted: 0,
+            pending_outgoing_request_id: HashMap::new(),
             outgoing_calls: HashMap::new(),
             env: Env::default(),
             request_id: None,
@@ -185,7 +196,11 @@ impl Canister {
         self
     }
 
-    pub async fn process_message(&mut self, message: Message) {
+    pub async fn process_message(
+        &mut self,
+        message: Message,
+        reply_sender: Option<oneshot::Sender<CanisterReply>>,
+    ) {
         // make sure we clean the task_returned receiver. since we may have sent more than one
         // completion signal from previous task.
         while self.task_completion_rx.try_recv().is_ok() {}
@@ -196,9 +211,66 @@ impl Canister {
         self.discard_call_queue();
         self.request_id = None;
 
+        // Setup the state of the current call.
+
         match message {
-            Message::CustomTask { .. } => {}
-            Message::Request { .. } => {}
+            Message::CustomTask {
+                request_id,
+                env,
+                task,
+            } => {
+                self.request_id = request_id;
+                self.env = env;
+            }
+            Message::Request {
+                request_id,
+                reply_to,
+                env,
+            } => {
+                if reply_to.is_some() && request_id.is_some() {
+                    panic!(
+                        "ic-kit-runtime: only one of reply_to or request_id can be set at a time."
+                    )
+                }
+
+                self.env = env;
+
+                // This message is a reply to a call we have made previously, the top-level message
+                // id therefore can be obtained from outgoing_calls table.
+                if let Some(id) = reply_to {
+                    let callbacks = self.outgoing_calls.remove(&id).expect(
+                        "ic-kit-runtime: No outgoing message with the given id on this canister.",
+                    );
+
+                    self.request_id = Some(callbacks.message_id);
+                } else {
+                    // just use the provided request id.
+                    self.request_id = request_id;
+                }
+
+                // Do a correctness on cycles_available by restoring it from the original message
+                // we're replying to.
+                if let Some(id) = self.request_id {
+                    let cycles = self
+                        .cycles_available_store
+                        .get(&id)
+                        .cloned()
+                        .unwrap_or(self.env.cycles_available);
+                    self.env.cycles_available = cycles;
+                    // update this for later.
+                    self.cycles_available_store.insert(id, cycles);
+                }
+
+                // Decide on the task that should be executed.
+            }
+        }
+
+        if let Some(sender) = reply_sender {
+            self.msg_reply_senders.insert(
+                self.request_id
+                    .expect("ic-kit-runtime: Request ID not set."),
+                sender,
+            );
         }
 
         self.task_tx
@@ -234,10 +306,15 @@ impl Canister {
                 // We panicked, so we don't want to send any of the outgoing messages.
                 self.discard_call_queue();
             }
-            _ => {}
+            _ => {
+                if let Some(reply) = self.msg_reply.take() {
+                    let chan = self
+                        .msg_reply_senders
+                        .remove(&self.request_id.unwrap())
+                        .expect("ic-kit-runtime: Response channel not found for request.");
+                }
+            }
         }
-
-        self.discard_pending_call();
     }
 
     fn discard_pending_call(&mut self) {
@@ -393,8 +470,8 @@ impl Ic0CallHandlerProxy for Canister {
             );
         }
 
-        let reply_data = self.msg_reply_data.entry(message_id).or_default();
-        reply_data.extend_from_slice(copy_from_canister(src, size));
+        self.msg_reply_data
+            .extend_from_slice(copy_from_canister(src, size));
 
         Ok(())
     }
@@ -418,19 +495,21 @@ impl Ic0CallHandlerProxy for Canister {
             }
         };
 
-        let reply_chan = self.msg_reply_senders.remove(&message_id).ok_or_else(|| {
-            "msg_reply may only be invoked before canister responses.".to_string()
-        })?;
+        // We have either replied to this message in the current task execution, so the msg_reply
+        // contains data, or we have done this in previous task execution for this incoming message
+        // so the msg_reply_sender channel is no longer available.
+        if self.msg_reply.is_some() || !self.msg_reply_senders.contains_key(&message_id) {
+            return Err("Current call is already replied to.".to_string());
+        }
 
-        let data = self.msg_reply_data.remove(&message_id).unwrap_or_default();
+        let data = self.msg_reply_data.clone();
+        self.msg_reply_data.clear();
         let cycles_refunded = self.env.cycles_available;
-        reply_chan
-            .send(CanisterReply::Reply {
-                data,
-                cycles_refunded,
-            })
-            .expect("ic-kit: could not send the response.");
         self.env.cycles_available = 0;
+        self.msg_reply = Some(CanisterReply::Reply {
+            data,
+            cycles_refunded,
+        });
 
         Ok(())
     }
@@ -454,24 +533,21 @@ impl Ic0CallHandlerProxy for Canister {
             }
         };
 
-        let reply_chan = self.msg_reply_senders.remove(&message_id).ok_or_else(|| {
-            "msg_reject may only be invoked before canister responses.".to_string()
-        })?;
+        self.msg_reply_data.clear();
 
-        // we don't care about the data anymore.
-        self.msg_reply_data.remove(&message_id);
+        // see: msg_reply
+        if self.msg_reply.is_some() || !self.msg_reply_senders.contains_key(&message_id) {
+            return Err("Current call is already replied to.".to_string());
+        }
 
         let cycles_refunded = self.env.cycles_available;
         let rejection_message = String::from_utf8_lossy(copy_from_canister(src, size)).into();
-
-        reply_chan
-            .send(CanisterReply::Reject {
-                rejection_code: RejectionCode::CanisterReject,
-                rejection_message,
-                cycles_refunded,
-            })
-            .expect("ic-kit: could not send the response.");
         self.env.cycles_available = 0;
+        self.msg_reply = Some(CanisterReply::Reject {
+            rejection_code: RejectionCode::CanisterReject,
+            rejection_message,
+            cycles_refunded,
+        });
 
         Ok(())
     }

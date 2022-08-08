@@ -79,7 +79,7 @@ pub enum RejectionCode {
 pub enum Message {
     /// A custom function that you want to be executed in the canister's execution thread.
     CustomTask {
-        /// The request id of the incoming message.
+        /// The request id of this incoming message.
         request_id: Option<IncomingRequestId>,
         /// the task handler that should be executed in the canister's execution thread.
         task: Box<dyn FnOnce() + Send + RefUnwindSafe>,
@@ -88,7 +88,7 @@ pub enum Message {
     },
     /// A normal IC request to the canister.
     Request {
-        /// The request id of the incoming message.
+        /// The request id of the incoming message. Must be None if the reply_to is set.
         request_id: Option<IncomingRequestId>,
         /// Only applicable if env.entry_mode is a reply/reject callback.
         reply_to: Option<OutgoingRequestId>,

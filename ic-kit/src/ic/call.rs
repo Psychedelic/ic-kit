@@ -85,10 +85,10 @@ impl error::Error for CallError {}
 impl CallBuilder {
     /// Create a new call constructor, calling this method does nothing unless one of the perform
     /// methods are called.
-    pub fn new(canister_id: Principal, method_name: String) -> Self {
+    pub fn new<S: Into<String>>(canister_id: Principal, method_name: S) -> Self {
         Self {
             canister_id,
-            method_name,
+            method_name: method_name.into(),
             payment: 0,
             arg: None,
         }
