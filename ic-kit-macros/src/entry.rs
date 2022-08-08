@@ -188,14 +188,14 @@ pub fn gen_entry_point_code(
         quote! {}
     } else {
         quote! {
-            let bytes = ic_kit::utils::arg_data();
+            let bytes = ic_kit::utils::arg_data_raw();
             let args = match ic_kit::candid::decode_args(&bytes) {
                 Ok(v) => v,
                 Err(_) => {
                     ic_kit::utils::reject("Could not decode arguments.");
                     return;
-                };
-            }
+                },
+            };
             let ( #( #arg_tuple, )* ) = args;
         }
     };
