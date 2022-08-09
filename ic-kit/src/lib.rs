@@ -31,4 +31,10 @@ pub mod prelude {
     pub use serde::{Deserialize, Serialize};
 
     pub use ic_kit_macros::*;
+
+    #[cfg(not(target_family = "wasm"))]
+    pub use ic_kit_runtime as rt;
+
+    #[cfg(not(target_family = "wasm"))]
+    pub use ic_kit_runtime::prelude::*;
 }

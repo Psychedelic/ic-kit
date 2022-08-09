@@ -10,8 +10,14 @@ cfg_if::cfg_if! {
         pub mod stable;
         pub mod types;
 
-        pub use canister::CanisterMethod;
-        pub use tokio::sync::oneshot;
-        pub use tokio::spawn;
+        pub use canister::{Canister, CanisterMethod};
+        pub use replica::Replica;
+        pub use tokio::runtime::Builder as TokioRuntimeBuilder;
+
+        pub mod prelude {
+            pub use crate::canister::Canister;
+            pub use crate::replica::Replica;
+            pub use crate::types::CanisterId;
+        }
     }
 }

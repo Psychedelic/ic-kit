@@ -58,7 +58,7 @@ pub struct Canister {
     /// the call_queue to be performed later on.
     pending_call: Option<(Principal, String, RequestCallbacks, u128, Vec<u8>)>,
     /// The thread in which the canister is being executed at.
-    execution_thread_handle: JoinHandle<()>,
+    _execution_thread_handle: JoinHandle<()>,
     /// The communication channel to send tasks to the execution thread.
     task_tx: Sender<Box<dyn Fn() + Send + RefUnwindSafe>>,
     /// Emits when the task we just sent has returned.
@@ -166,7 +166,7 @@ impl Canister {
             request_id: None,
             call_queue: Vec::with_capacity(8),
             pending_call: None,
-            execution_thread_handle,
+            _execution_thread_handle: execution_thread_handle,
             task_tx,
             task_completion_rx,
             reply_tx,
@@ -360,6 +360,7 @@ impl Canister {
             self.outgoing_calls.insert(request_id, cb);
 
             tmp.push(CanisterCall {
+                sender: self.id(),
                 request_id,
                 callee,
                 method,

@@ -19,7 +19,7 @@ cfg-if = "0.1"
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 ic-kit-sys = {path="../ic-kit-sys", version="0.1.1"}
 ic-types = "0.4.1"
-tokio = {version="1.20", features=["sync", "macros"]}
+tokio = {version="1.20", features=["sync", "macros", "rt"]}
 crossbeam = "0.8.2"
 thread-local-panic-hook = "0.1.0"
 memmap = "0.7.0"

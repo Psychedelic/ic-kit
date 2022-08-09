@@ -3,7 +3,7 @@ use std::panic::RefUnwindSafe;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const REQUEST_ID: AtomicU64 = AtomicU64::new(0);
+static REQUEST_ID: AtomicU64 = AtomicU64::new(0);
 
 ///  A request ID for a request that is coming to this canister from the outside.
 pub type IncomingRequestId = RequestId;
@@ -17,7 +17,7 @@ pub struct RequestId(u64);
 impl RequestId {
     /// Create a new request id and return it.
     pub fn new() -> Self {
-        Self(REQUEST_ID.fetch_add(1, Ordering::Relaxed))
+        Self(REQUEST_ID.fetch_add(1, Ordering::SeqCst))
     }
 }
 
@@ -106,7 +106,9 @@ pub enum Message {
 }
 
 /// A call that has made to another canister.
+#[derive(Debug)]
 pub struct CanisterCall {
+    pub sender: Principal,
     pub request_id: RequestId,
     pub callee: Principal,
     pub method: String,
@@ -120,6 +122,7 @@ impl From<CanisterCall> for Message {
             request_id: call.request_id,
             env: Env::default()
                 .with_entry_mode(EntryMode::Update)
+                .with_sender(call.sender)
                 .with_method_name(call.method)
                 .with_cycles_available(call.payment)
                 .with_args(call.arg),
@@ -151,6 +154,7 @@ impl CanisterReply {
             } => Message::Reply {
                 reply_to,
                 env: Env::default()
+                    .with_entry_mode(EntryMode::ReplyCallback)
                     .with_args(data)
                     .with_cycles_refunded(cycles_refunded),
             },
@@ -161,10 +165,23 @@ impl CanisterReply {
             } => Message::Reply {
                 reply_to,
                 env: Env::default()
+                    .with_entry_mode(EntryMode::RejectCallback)
                     .with_cycles_refunded(cycles_refunded)
                     .with_rejection_code(rejection_code)
                     .with_rejection_message(rejection_message),
             },
+        }
+    }
+
+    /// Convert the canister reply to a Result containing the raw data and the rejection code.
+    pub fn to_result(self) -> Result<Vec<u8>, (RejectionCode, String)> {
+        match self {
+            CanisterReply::Reply { data, .. } => Ok(data),
+            CanisterReply::Reject {
+                rejection_code,
+                rejection_message,
+                ..
+            } => Err((rejection_code, rejection_message)),
         }
     }
 }

@@ -3,8 +3,9 @@ use crate::futures::CallFuture;
 use crate::ic::Cycles;
 use crate::utils::arg_data_raw;
 use candid::utils::{ArgumentDecoder, ArgumentEncoder};
-use candid::{decode_args, encode_args, encode_one, CandidType, Principal};
+use candid::{decode_args, decode_one, encode_args, encode_one, CandidType, Principal};
 use ic_kit_sys::ic0;
+use serde::de::DeserializeOwned;
 use serde::Deserialize;
 use std::error;
 use std::fmt;
@@ -300,6 +301,27 @@ impl CallBuilder {
         let bytes = self.perform_raw().await?;
 
         match decode_args(&bytes) {
+            Err(_) => Err(CallError::ResponseDeserializationError(bytes)),
+            Ok(r) => Ok(r),
+        }
+    }
+
+    /// Perform the call and return a future which will resolve to the candid decoded response.
+    /// Unlink perform, this method only expects a result with one argument from the canister,
+    /// and decodes the arguments using the candid's decode_one.
+    ///
+    ///
+    /// # Traps
+    ///
+    /// This method traps if the amount determined in the `payment` is larger than the canister's
+    /// balance at the time of invocation.
+    pub async fn perform_one<T>(&self) -> Result<T, CallError>
+    where
+        T: DeserializeOwned + CandidType,
+    {
+        let bytes = self.perform_raw().await?;
+
+        match decode_one(&bytes) {
             Err(_) => Err(CallError::ResponseDeserializationError(bytes)),
             Ok(r) => Ok(r),
         }

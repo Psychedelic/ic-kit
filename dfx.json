@@ -6,6 +6,11 @@
       "candid": "samples/counter/src/candid.did",
       "package": "ic_kit_example_counter",
       "type": "rust"
+    },
+    "fib": {
+      "candid": "samples/counter/src/candid.did",
+      "package": "ic_kit_example_fib",
+      "type": "rust"
     }
   },
   "networks": {

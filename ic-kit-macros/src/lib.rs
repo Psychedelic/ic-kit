@@ -1,5 +1,7 @@
 mod entry;
+mod test;
 
+use crate::test::gen_test_code;
 use entry::{gen_entry_point_code, EntryPoint};
 use proc_macro::TokenStream;
 
@@ -53,4 +55,12 @@ pub fn update(attr: TokenStream, item: TokenStream) -> TokenStream {
 #[proc_macro_attribute]
 pub fn query(attr: TokenStream, item: TokenStream) -> TokenStream {
     process_entry_point(EntryPoint::Query, attr, item)
+}
+
+/// A macro to generate IC-Kit tests.
+#[proc_macro_attribute]
+pub fn kit_test(attr: TokenStream, item: TokenStream) -> TokenStream {
+    gen_test_code(attr.into(), item.into())
+        .unwrap_or_else(|error| error.to_compile_error())
+        .into()
 }

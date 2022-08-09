@@ -35,7 +35,7 @@ enum ReplicaMessage {
 impl Replica {
     /// Create a new replica with the given canister.
     pub fn new(canisters: Vec<Canister>) -> Self {
-        let mut tmp = Replica::default();
+        let tmp = Replica::default();
 
         for canister in canisters {
             tmp.add_canister(canister);
@@ -57,14 +57,14 @@ impl Replica {
             })
             .unwrap_or_else(|_| panic!("ic-kit-runtime: could not send message to replica"));
 
-        /// Start the event loop for the canister.
+        // Start the event loop for the canister.
         tokio::spawn(async move {
             let mut rx = rx;
             let mut canister = canister;
             let canister_id = canister.id();
 
             while let Some(message) = rx.recv().await {
-                let mut perform_call = canister
+                let perform_call = canister
                     .process_message(message.message, message.reply_sender)
                     .await;
 
