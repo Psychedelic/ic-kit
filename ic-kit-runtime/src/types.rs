@@ -22,6 +22,7 @@ impl RequestId {
 }
 
 /// The entry method for a request.
+#[derive(Debug, PartialEq, Copy, Clone)]
 pub enum EntryMode {
     Init,
     PreUpgrade,
@@ -80,21 +81,50 @@ pub enum Message {
     /// A custom function that you want to be executed in the canister's execution thread.
     CustomTask {
         /// The request id of this incoming message.
-        request_id: Option<IncomingRequestId>,
+        request_id: IncomingRequestId,
         /// the task handler that should be executed in the canister's execution thread.
-        task: Box<dyn FnOnce() + Send + RefUnwindSafe>,
+        task: Box<dyn Fn() + Send + RefUnwindSafe>,
         /// The env to use for this custom execution.
         env: Env,
     },
-    /// A normal IC request to the canister.
+    /// A top-level request to the canister.
     Request {
         /// The request id of the incoming message. Must be None if the reply_to is set.
-        request_id: Option<IncomingRequestId>,
-        /// Only applicable if env.entry_mode is a reply/reject callback.
-        reply_to: Option<OutgoingRequestId>,
+        request_id: IncomingRequestId,
         /// The env to use during the execution of this task.
         env: Env,
     },
+    // Either a reply_callback or reject_callbacks.
+    Reply {
+        /// Which request is this reply for.
+        reply_to: OutgoingRequestId,
+        /// The env to use for this, assert:
+        ///     env.entry_mode == ReplyCallback
+        ///     env.entry_mode == RejectCallback
+        env: Env,
+    },
+}
+
+/// A call that has made to another canister.
+pub struct CanisterCall {
+    pub request_id: RequestId,
+    pub callee: Principal,
+    pub method: String,
+    pub payment: u128,
+    pub arg: Vec<u8>,
+}
+
+impl From<CanisterCall> for Message {
+    fn from(call: CanisterCall) -> Self {
+        Message::Request {
+            request_id: call.request_id,
+            env: Env::default()
+                .with_entry_mode(EntryMode::Update)
+                .with_method_name(call.method)
+                .with_cycles_available(call.payment)
+                .with_args(call.arg),
+        }
+    }
 }
 
 /// A reply by the canister.

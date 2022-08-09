@@ -1,7 +1,4 @@
-use ic_kit::candid::encode_one;
-use ic_kit::ic::{print, trap};
 use ic_kit::prelude::*;
-use ic_kit::utils::{reject, reply};
 
 #[derive(Default)]
 pub struct Counter {
@@ -22,42 +19,42 @@ impl Counter {
     }
 }
 
-#[inspect_message]
-pub fn inspect_message() -> bool {
-    if ic_kit::utils::arg_data_size() > 5000 {
-        return false;
-    }
-
-    true
-}
-
 #[update]
 pub fn increment() -> u64 {
-    ic::with_mut(Counter::increment)
+    println!("Running increment.");
+    with_mut(Counter::increment)
 }
 
-#[export_name = "canister_update test"]
-fn test_methods() {
-    use ic_kit_sys::ic0;
+#[test]
+fn x() {
+    use ic_kit::rt;
+    use ic_kit::rt::types::*;
+    use rt::types::CanisterId;
 
-    spawn(async {
-        print("spawn1: call");
-        let msg = CallBuilder::new(id(), "increment").perform_raw().await;
-        print("spawn1: reply");
-        print(format!("{:?}", msg));
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .build()
+        .unwrap();
 
-        // reply(&encode_one("Reply from s1").unwrap());
-        reject("Reject message");
-        // trap("X");
-    });
+    rt.block_on(async {
+        let canister_id = CanisterId::from_u64(12).into();
+        let mut canister = rt::canister::Canister::new(canister_id).with_method::<increment>();
+        let call = CanisterCall {
+            request_id: RequestId::new(),
+            callee: canister_id,
+            method: "increment".to_string(),
+            payment: 0,
+            arg: Vec::from(ic::CANDID_EMPTY_ARG),
+        };
 
-    spawn(async {
-        print("spawn2: call");
-        let msg = CallBuilder::new(id(), "increment").perform_raw().await;
-        print("spawn2: reply");
-        print(format!("{:?}", msg));
+        let (tx, rx) = rt::oneshot::channel();
 
-        reply(&encode_one("Reply from s2").unwrap());
-        // trap("J");
+        tokio::spawn(async move {
+            println!("Making canister call.");
+            canister.process_message(call.into(), Some(tx)).await;
+        });
+
+        println!("Waiting for response:");
+        let response = rx.await.unwrap();
+        println!("Response = {:?}", response);
     });
 }

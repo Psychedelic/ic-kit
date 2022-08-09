@@ -12,7 +12,11 @@ keywords = ["internet-computer", "canister", "cdk", "fleek"]
 include = ["src", "Cargo.toml", "README.md"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
 [dependencies]
+cfg-if = "0.1"
+
+[target.'cfg(not(target_family = "wasm"))'.dependencies]
 ic-kit-sys = {path="../ic-kit-sys", version="0.1.1"}
 ic-types = "0.4.1"
 tokio = {version="1.20", features=["sync", "macros"]}

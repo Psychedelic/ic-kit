@@ -24,7 +24,7 @@ pub struct Canister {
     /// The canister balance.
     balance: u128,
     /// Maps the name of each of exported methods to the task function.
-    symbol_table: HashMap<String, Box<dyn Fn() + Send + RefUnwindSafe>>,
+    symbol_table: HashMap<String, fn()>,
     /// The data reply that is being built for the current message. An interesting thing about the
     /// IC that I did not expect: The reply data is not preserved throughout the async context.
     /// And the reply is the first call to msg_reply that is inside a non-trapping task.
@@ -43,7 +43,7 @@ pub struct Canister {
     /// Pending outgoing requests that have not been resolved yet. This is used so we know when
     /// an incoming request is finally finished so we can send the last trapping message as the
     /// response.
-    pending_outgoing_request_id: HashMap<IncomingRequestId, HashSet<OutgoingRequestId>>,
+    pending_outgoing_requests: HashMap<IncomingRequestId, HashSet<OutgoingRequestId>>,
     /// Map each of the out going requests done by this canister to the callbacks for that
     /// call.
     outgoing_calls: HashMap<OutgoingRequestId, RequestCallbacks>,
@@ -114,7 +114,7 @@ pub trait CanisterMethod {
 }
 
 impl Canister {
-    pub fn new(canister_id: CanisterId) -> Self {
+    pub fn new<C: Into<CanisterId>>(canister_id: C) -> Self {
         let (request_tx, request_rx) = mpsc::channel(8);
         let (reply_tx, reply_rx) = mpsc::channel(8);
         let (task_tx, mut task_rx) = mpsc::channel::<Box<dyn Fn() + Send + RefUnwindSafe>>(8);
@@ -131,31 +131,28 @@ impl Canister {
             // - No message such as "thread panic during test" in the terminal.
             // - TODO: Capture the panic location.
             // let panic_hook_tx = task_completion_tx.clone();
-            set_hook(Box::new(move |_m| {}));
+            set_hook(Box::new(|_| {}));
 
-            block_on(async {
-                while let Some(task) = task_rx.recv().await {
-                    let c = if let Err(payload) = catch_unwind(|| {
-                        task();
-                    }) {
-                        Completion::Panicked(downcast_panic_payload(&payload))
-                    } else {
-                        Completion::Ok
-                    };
+            while let Some(task) = block_on(task_rx.recv()) {
+                let c = if let Err(payload) = catch_unwind(|| {
+                    task();
+                }) {
+                    Completion::Panicked(downcast_panic_payload(&payload))
+                } else {
+                    Completion::Ok
+                };
 
-                    // In case we panic the hook might have already sent the proper panic message,
-                    // and we may be double sending this signal here, but this is okay since,
-                    // process_message always makes sure there is no pending signals in this channel
-                    // before sending a new task.
-                    task_completion_tx.send(c)
-                        .await
-                        .expect("ic-kit-runtime: Execution thread could not send task-completion signal to the main thread.");
-                }
-            });
+                // In case we panic the hook might have already sent the proper panic message,
+                // and we may be double sending this signal here, but this is okay since,
+                // process_message always makes sure there is no pending signals in this channel
+                // before sending a new task.
+                block_on(task_completion_tx.send(c))
+                    .expect("ic-kit-runtime: Execution thread could not send task-completion signal to the main thread.");
+            }
         });
 
         Self {
-            canister_id: Vec::from(Principal::from(canister_id).as_slice()),
+            canister_id: Vec::from(Principal::from(canister_id.into()).as_slice()),
             balance: DEFAULT_PROVISIONAL_CYCLES_BALANCE,
             symbol_table: HashMap::new(),
             msg_reply_data: Vec::new(),
@@ -163,7 +160,7 @@ impl Canister {
             msg_reply: None,
             cycles_available_store: HashMap::new(),
             cycles_accepted: 0,
-            pending_outgoing_request_id: HashMap::new(),
+            pending_outgoing_requests: HashMap::new(),
             outgoing_calls: HashMap::new(),
             env: Env::default(),
             request_id: None,
@@ -180,7 +177,7 @@ impl Canister {
     /// Provide the canister with the definition of the given method.
     pub fn with_method<M: CanisterMethod + 'static>(mut self) -> Self {
         let method_name = String::from(M::EXPORT_NAME);
-        let task_fn = Box::new(M::exported_method);
+        let task_fn = M::exported_method;
 
         if self.symbol_table.contains_key(&method_name) {
             panic!("The canister already has a '{}' method.", method_name);
@@ -200,87 +197,184 @@ impl Canister {
         &mut self,
         message: Message,
         reply_sender: Option<oneshot::Sender<CanisterReply>>,
-    ) {
-        // make sure we clean the task_returned receiver. since we may have sent more than one
-        // completion signal from previous task.
-        while self.task_completion_rx.try_recv().is_ok() {}
-        while self.request_rx.try_recv().is_ok() {}
-
+    ) -> Vec<CanisterCall> {
         // Force reset the state.
         self.discard_pending_call();
         self.discard_call_queue();
         self.request_id = None;
+        self.cycles_accepted = 0;
 
-        // Setup the state of the current call.
-
-        match message {
+        // Assign the request_id for this message.
+        let (request_id, env, task) = match message {
             Message::CustomTask {
                 request_id,
                 env,
                 task,
             } => {
-                self.request_id = request_id;
-                self.env = env;
+                assert!(
+                    reply_sender.is_some(),
+                    "A request must provide a response channel."
+                );
+
+                assert!(
+                    env.entry_mode != EntryMode::ReplyCallback
+                        && env.entry_mode != EntryMode::RejectCallback
+                );
+
+                (request_id, env, Some(task))
             }
-            Message::Request {
-                request_id,
-                reply_to,
-                env,
-            } => {
-                if reply_to.is_some() && request_id.is_some() {
-                    panic!(
-                        "ic-kit-runtime: only one of reply_to or request_id can be set at a time."
-                    )
-                }
+            Message::Request { request_id, env } => {
+                assert!(
+                    reply_sender.is_some(),
+                    "A request must provide a response channel."
+                );
 
-                self.env = env;
+                assert!(
+                    env.entry_mode != EntryMode::ReplyCallback
+                        && env.entry_mode != EntryMode::RejectCallback
+                        && env.entry_mode != EntryMode::CleanupCallback
+                        && env.entry_mode != EntryMode::CustomTask
+                );
 
-                // This message is a reply to a call we have made previously, the top-level message
-                // id therefore can be obtained from outgoing_calls table.
-                if let Some(id) = reply_to {
-                    let callbacks = self.outgoing_calls.remove(&id).expect(
-                        "ic-kit-runtime: No outgoing message with the given id on this canister.",
-                    );
+                let entry_point_name = env.get_entry_point_name();
+                let task = self.symbol_table.get(&entry_point_name).map(|f| {
+                    let f = f.clone();
+                    Box::new(move || {
+                        f();
+                    }) as Box<dyn Fn() + Send + RefUnwindSafe>
+                });
 
-                    self.request_id = Some(callbacks.message_id);
-                } else {
-                    // just use the provided request id.
-                    self.request_id = request_id;
-                }
-
-                // Do a correctness on cycles_available by restoring it from the original message
-                // we're replying to.
-                if let Some(id) = self.request_id {
-                    let cycles = self
-                        .cycles_available_store
-                        .get(&id)
-                        .cloned()
-                        .unwrap_or(self.env.cycles_available);
-                    self.env.cycles_available = cycles;
-                    // update this for later.
-                    self.cycles_available_store.insert(id, cycles);
-                }
-
-                // Decide on the task that should be executed.
+                (request_id, env, task)
             }
+            Message::Reply { reply_to, env } => {
+                let callbacks = self.outgoing_calls.remove(&reply_to).expect(
+                    "ic-kit-runtime: No outgoing message with the given id on this canister.",
+                );
+
+                let id = callbacks.message_id;
+                let _clean_callbacks = callbacks.cleanup;
+
+                assert!(
+                    env.entry_mode == EntryMode::ReplyCallback
+                        || env.entry_mode == EntryMode::RejectCallback
+                );
+
+                let set = self.pending_outgoing_requests.get_mut(&id).unwrap();
+                set.remove(&reply_to);
+
+                if set.is_empty() {
+                    self.pending_outgoing_requests.remove(&id);
+                }
+
+                let (fun, fun_env) = match env.entry_mode {
+                    EntryMode::ReplyCallback => callbacks.reply,
+                    EntryMode::RejectCallback => callbacks.reject,
+                    _ => unreachable!(),
+                };
+
+                let task = Box::new(move || unsafe {
+                    let fun = std::mem::transmute::<isize, fn(isize)>(fun);
+                    fun(fun_env);
+                }) as Box<dyn Fn() + Send + RefUnwindSafe>;
+
+                (id, env, Some(task))
+            }
+        };
+
+        if task.is_none() {
+            let chan = reply_sender.unwrap();
+
+            let reply = CanisterReply::Reject {
+                rejection_code: RejectionCode::DestinationInvalid,
+                rejection_message: format!(
+                    "Canister does not have a '{}' method.",
+                    env.method_name.unwrap_or_default()
+                ),
+                cycles_refunded: env.cycles_available,
+            };
+
+            chan.send(reply)
+                .expect("ic-kit-runtime: Could not send the message reply.");
+
+            return Vec::new();
         }
+
+        self.request_id = Some(request_id);
+        self.env = env;
+        self.env.cycles_available = *self
+            .cycles_available_store
+            .entry(request_id)
+            .or_insert(self.env.cycles_available);
 
         if let Some(sender) = reply_sender {
-            self.msg_reply_senders.insert(
-                self.request_id
-                    .expect("ic-kit-runtime: Request ID not set."),
-                sender,
-            );
+            self.msg_reply_senders
+                .insert(self.request_id.unwrap(), sender);
         }
 
-        self.task_tx
-            .send(Box::new(|| {
-                println!("Some function related to the request.")
-            }))
-            .await
-            .unwrap_or_else(|_| {
-                panic!("ic-kit-runtime: Could not send the task to the execution thread.")
+        let completion = self.perform(task.unwrap()).await;
+
+        match completion {
+            Completion::Panicked(m) => {
+                // We panicked, so we don't want to send any of the outgoing messages.
+                self.discard_call_queue();
+                // return the cycles available in this call.
+                self.env.cycles_available += self.cycles_accepted;
+                self.cycles_accepted = 0;
+                self.cycles_available_store
+                    .insert(self.request_id.unwrap(), self.env.cycles_available);
+                self.maybe_final_reply(Some(m), self.env.cycles_available);
+            }
+            Completion::Ok => {
+                if let Some(reply) = self.msg_reply.take() {
+                    let chan = self
+                        .msg_reply_senders
+                        .remove(&self.request_id.unwrap())
+                        .expect("ic-kit-runtime: Response channel not found for request.");
+
+                    chan.send(reply)
+                        .expect("ic-kit-runtime: Could not send the message reply.")
+                }
+
+                self.maybe_final_reply(None, self.env.cycles_available);
+            }
+        };
+
+        let queue = std::mem::replace(&mut self.call_queue, Vec::new());
+        let mut tmp = Vec::<CanisterCall>::with_capacity(queue.len());
+        for (callee, method, cb, payment, arg) in queue {
+            let request_id = RequestId::new();
+
+            // Insert the pending request id for the current call.
+            self.pending_outgoing_requests
+                .entry(self.request_id.unwrap())
+                .or_default()
+                .insert(request_id);
+
+            // Store the callbacks to wake up the caller.
+            self.outgoing_calls.insert(request_id, cb);
+
+            tmp.push(CanisterCall {
+                request_id,
+                callee,
+                method,
+                payment,
+                arg,
             });
+        }
+
+        tmp
+    }
+
+    /// Execute the given task in the execution thread and return the completion status.
+    async fn perform(&mut self, task: Box<dyn Fn() + Send + RefUnwindSafe>) -> Completion {
+        // make sure we clean the task_returned receiver. since we may have sent more than one
+        // completion signal from previous task.
+        while self.task_completion_rx.try_recv().is_ok() {}
+        while self.request_rx.try_recv().is_ok() {}
+
+        self.task_tx.send(task).await.unwrap_or_else(|_| {
+            panic!("ic-kit-runtime: Could not send the task to the execution thread.")
+        });
 
         let completion: Completion = loop {
             select! {
@@ -301,20 +395,35 @@ impl Canister {
         // Discard the pending call regardless of the completion status.
         self.discard_pending_call();
 
-        match completion {
-            Completion::Panicked(m) => {
-                // We panicked, so we don't want to send any of the outgoing messages.
-                self.discard_call_queue();
-            }
-            _ => {
-                if let Some(reply) = self.msg_reply.take() {
-                    let chan = self
-                        .msg_reply_senders
-                        .remove(&self.request_id.unwrap())
-                        .expect("ic-kit-runtime: Response channel not found for request.");
-                }
-            }
+        completion
+    }
+
+    /// Send the final reply for the current call if none has already been sent.
+    fn maybe_final_reply(&mut self, trap_message: Option<String>, cycles: u128) {
+        let id = match self.request_id {
+            Some(id) => id,
+            None => return,
+        };
+
+        // There are still pending outgoing calls we have to wait for them to finish.
+        if self.pending_outgoing_requests.contains_key(&id) || !self.call_queue.is_empty() {
+            return;
         }
+
+        let chan = match self.msg_reply_senders.remove(&id) {
+            Some(c) => c,
+            None => return,
+        };
+
+        self.cycles_available_store.remove(&id);
+
+        chan.send(CanisterReply::Reject {
+            rejection_code: RejectionCode::CanisterError,
+            rejection_message: trap_message
+                .unwrap_or_else(|| "Canister did not reply to the call".to_string()),
+            cycles_refunded: cycles,
+        })
+        .expect("ic-kit-runtime: Could not send the message reply.")
     }
 
     fn discard_pending_call(&mut self) {

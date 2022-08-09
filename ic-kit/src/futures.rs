@@ -14,7 +14,7 @@ use std::pin::Pin;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::task::{Context, Poll, Waker};
 
-#[cfg(target_arch = "wasm32-unknown-unknown")]
+#[cfg(target_family = "wasm")]
 #[allow(dead_code)]
 mod rc {
     use std::cell::{RefCell, RefMut};
@@ -75,7 +75,7 @@ mod rc {
     }
 }
 
-#[cfg(not(target_arch = "wasm32-unknown-unknown"))]
+#[cfg(not(target_family = "wasm"))]
 #[allow(dead_code)]
 mod rc {
     use std::future::Future;
