@@ -20,7 +20,7 @@ const DEFAULT_PROVISIONAL_CYCLES_BALANCE: u128 = 100_000_000_000_000;
 /// A canister that is being executed.
 pub struct Canister {
     /// The id of the canister.
-    canister_id: Vec<u8>,
+    canister_id: Principal,
     /// The canister balance.
     balance: u128,
     /// Maps the name of each of exported methods to the task function.
@@ -114,7 +114,7 @@ pub trait CanisterMethod {
 }
 
 impl Canister {
-    pub fn new<C: Into<CanisterId>>(canister_id: C) -> Self {
+    pub fn new<T: Into<Principal>>(canister_id: T) -> Self {
         let (request_tx, request_rx) = mpsc::channel(8);
         let (reply_tx, reply_rx) = mpsc::channel(8);
         let (task_tx, mut task_rx) = mpsc::channel::<Box<dyn Fn() + Send + RefUnwindSafe>>(8);
@@ -152,7 +152,7 @@ impl Canister {
         });
 
         Self {
-            canister_id: Vec::from(Principal::from(canister_id.into()).as_slice()),
+            canister_id: canister_id.into(),
             balance: DEFAULT_PROVISIONAL_CYCLES_BALANCE,
             symbol_table: HashMap::new(),
             msg_reply_data: Vec::new(),
@@ -172,6 +172,11 @@ impl Canister {
             reply_tx,
             request_rx,
         }
+    }
+
+    /// Return the canister ID.
+    pub fn id(&self) -> Principal {
+        self.canister_id
     }
 
     /// Provide the canister with the definition of the given method.
@@ -305,6 +310,7 @@ impl Canister {
             .cycles_available_store
             .entry(request_id)
             .or_insert(self.env.cycles_available);
+        self.balance += self.env.cycles_refunded;
 
         if let Some(sender) = reply_sender {
             self.msg_reply_senders
@@ -787,7 +793,7 @@ impl Ic0CallHandlerProxy for Canister {
     }
 
     fn canister_self_size(&mut self) -> Result<isize, String> {
-        Ok(self.canister_id.len() as isize)
+        Ok(self.canister_id.as_slice().len() as isize)
     }
 
     fn canister_self_copy(&mut self, dst: isize, offset: isize, size: isize) -> Result<(), String> {

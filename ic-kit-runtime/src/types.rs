@@ -141,6 +141,34 @@ pub enum CanisterReply {
     },
 }
 
+impl CanisterReply {
+    /// Convert the reply to a message that can be delivered to a canister.
+    pub fn to_message(self, reply_to: OutgoingRequestId) -> Message {
+        match self {
+            CanisterReply::Reply {
+                data,
+                cycles_refunded,
+            } => Message::Reply {
+                reply_to,
+                env: Env::default()
+                    .with_args(data)
+                    .with_cycles_refunded(cycles_refunded),
+            },
+            CanisterReply::Reject {
+                rejection_code,
+                rejection_message,
+                cycles_refunded,
+            } => Message::Reply {
+                reply_to,
+                env: Env::default()
+                    .with_cycles_refunded(cycles_refunded)
+                    .with_rejection_code(rejection_code)
+                    .with_rejection_message(rejection_message),
+            },
+        }
+    }
+}
+
 impl Default for Env {
     fn default() -> Self {
         Env {

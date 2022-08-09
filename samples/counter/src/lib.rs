@@ -36,8 +36,10 @@ fn x() {
         .unwrap();
 
     rt.block_on(async {
-        let canister_id = CanisterId::from_u64(12).into();
-        let mut canister = rt::canister::Canister::new(canister_id).with_method::<increment>();
+        let canister_id = CanisterId::from_u64(124).into();
+        let canister = rt::canister::Canister::new(canister_id).with_method::<increment>();
+        let replica = rt::replica::Replica::new(vec![canister]);
+
         let call = CanisterCall {
             request_id: RequestId::new(),
             callee: canister_id,
@@ -46,15 +48,7 @@ fn x() {
             arg: Vec::from(ic::CANDID_EMPTY_ARG),
         };
 
-        let (tx, rx) = rt::oneshot::channel();
-
-        tokio::spawn(async move {
-            println!("Making canister call.");
-            canister.process_message(call.into(), Some(tx)).await;
-        });
-
-        println!("Waiting for response:");
-        let response = rx.await.unwrap();
-        println!("Response = {:?}", response);
+        let response = replica.perform(call).await;
+        println!("R = {:?}", response);
     });
 }
