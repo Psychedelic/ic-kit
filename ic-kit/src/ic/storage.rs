@@ -1,4 +1,4 @@
-use crate::storage::Storage;
+use crate::storage::{BorrowMany, BorrowMutMany, Storage};
 
 thread_local! {
     static STORAGE: Storage = Storage::default();
@@ -30,9 +30,6 @@ pub fn maybe_with<T: 'static, U, F: FnOnce(&T) -> U>(callback: F) -> Option<U> {
 ///
 /// This is a safe replacement for the previously known `ic_kit::ic::get` API, and you can use it
 /// instead of `lazy_static` or `local_thread`.
-///
-/// # Example
-///
 pub fn with_mut<T: 'static + Default, U, F: FnOnce(&mut T) -> U>(callback: F) -> U {
     STORAGE.with(|storage| storage.with_mut(callback))
 }
@@ -51,4 +48,57 @@ pub fn take<T: 'static>() -> Option<T> {
 /// Swaps the value associated with type `T` with the given value, returns the old one.
 pub fn swap<T: 'static>(value: T) -> Option<T> {
     STORAGE.with(|storage| storage.swap(value))
+}
+
+/// Like [`crate::ic::with`] but passes the immutable reference of multiple variables to the
+/// closure as a tuple.
+///
+/// # Example
+/// ```
+/// use ic_kit::ic;
+///
+/// #[derive(Default)]
+/// struct S1 {
+///     a: u64,
+/// }
+///
+/// #[derive(Default)]
+/// struct S2 {
+///     a: u64,
+/// }
+///
+///  ic::with_many(|(a, b): (&S1, &S2)| {
+///     // Now we have access to both S1 and S2.
+///     println!("S1: {}, S2: {}", a.a, b.a);
+///  });
+/// ```
+pub fn with_many<A: BorrowMany, U, F: FnOnce(A) -> U>(callback: F) -> U {
+    STORAGE.with(|storage| storage.with_many(callback))
+}
+
+/// Like [`crate::ic::with_mut`] but passes the mutable reference of multiple variables to the
+/// closure as a tuple.
+///
+/// # Example
+/// ```
+/// use ic_kit::ic;
+///
+/// #[derive(Default)]
+/// struct S1 {
+///     a: u64,
+/// }
+///
+/// #[derive(Default)]
+/// struct S2 {
+///     a: u64,
+/// }
+///
+///  ic::with_many_mut(|(a, b): (&mut S1, &mut S2)| {
+///     // Now we have access to both S1 and S2 and can mutate them.
+///     a.a += 1;
+///     b.a += 1;
+///  });
+/// ```
+pub fn with_many_mut<A: BorrowMutMany, U, F: FnOnce(A) -> U>(callback: F) -> U {
+    STORAGE.with(|storage| storage.with_many_mut(callback))
 }
