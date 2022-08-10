@@ -7,3 +7,6 @@
 
 /// System APIs exposed by the Internet Computer's WASM runtime.
 pub mod ic0;
+
+/// The common types related to the system API.
+pub mod types;

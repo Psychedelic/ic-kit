@@ -1,8 +1,10 @@
+use crate::call::CallReply;
 use crate::types::*;
 use futures::executor::block_on;
 use ic_kit_sys::ic0;
 use ic_kit_sys::ic0::runtime;
 use ic_kit_sys::ic0::runtime::Ic0CallHandlerProxy;
+use ic_kit_sys::types::RejectionCode;
 use ic_types::Principal;
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
@@ -31,10 +33,10 @@ pub struct Canister {
     msg_reply_data: Vec<u8>,
     /// Map each incoming request to its response channel, if it is None, it means the
     /// message has already been responded to.
-    msg_reply_senders: HashMap<IncomingRequestId, oneshot::Sender<CanisterReply>>,
+    msg_reply_senders: HashMap<IncomingRequestId, oneshot::Sender<CallReply>>,
     /// The reply for the current call that can be sent via msg_reply_senders channel once the
     /// current message has been processed without trapping.
-    msg_reply: Option<CanisterReply>,
+    msg_reply: Option<CallReply>,
     /// The amount of available cycles for each incoming request. This is only used
     /// for recovering self.env state for reply callbacks.
     cycles_available_store: HashMap<IncomingRequestId, u128>,
@@ -114,6 +116,7 @@ pub trait CanisterMethod {
 }
 
 impl Canister {
+    /// Create a new instance of this canister with the given id.
     pub fn new<T: Into<Principal>>(canister_id: T) -> Self {
         let (request_tx, request_rx) = mpsc::channel(8);
         let (reply_tx, reply_rx) = mpsc::channel(8);
@@ -201,7 +204,7 @@ impl Canister {
     pub async fn process_message(
         &mut self,
         message: Message,
-        reply_sender: Option<oneshot::Sender<CanisterReply>>,
+        reply_sender: Option<oneshot::Sender<CallReply>>,
     ) -> Vec<CanisterCall> {
         // Force reset the state.
         self.discard_pending_call();
@@ -278,8 +281,11 @@ impl Canister {
                 };
 
                 let task = Box::new(move || unsafe {
-                    let fun = std::mem::transmute::<isize, fn(isize)>(fun);
-                    fun(fun_env);
+                    // -1 is used by a one-way call.
+                    if fun != -1 {
+                        let fun = std::mem::transmute::<isize, fn(isize)>(fun);
+                        fun(fun_env);
+                    }
                 }) as Box<dyn Fn() + Send + RefUnwindSafe>;
 
                 (id, env, Some(task))
@@ -289,7 +295,7 @@ impl Canister {
         if task.is_none() {
             let chan = reply_sender.unwrap();
 
-            let reply = CanisterReply::Reject {
+            let reply = CallReply::Reject {
                 rejection_code: RejectionCode::DestinationInvalid,
                 rejection_message: format!(
                     "Canister does not have a '{}' method.",
@@ -424,7 +430,7 @@ impl Canister {
 
         self.cycles_available_store.remove(&id);
 
-        chan.send(CanisterReply::Reject {
+        chan.send(CallReply::Reject {
             rejection_code: RejectionCode::CanisterError,
             rejection_message: trap_message
                 .unwrap_or_else(|| "Canister did not reply to the call".to_string()),
@@ -622,7 +628,7 @@ impl Ic0CallHandlerProxy for Canister {
         self.msg_reply_data.clear();
         let cycles_refunded = self.env.cycles_available;
         self.env.cycles_available = 0;
-        self.msg_reply = Some(CanisterReply::Reply {
+        self.msg_reply = Some(CallReply::Reply {
             data,
             cycles_refunded,
         });
@@ -659,7 +665,7 @@ impl Ic0CallHandlerProxy for Canister {
         let cycles_refunded = self.env.cycles_available;
         let rejection_message = String::from_utf8_lossy(copy_from_canister(src, size)).into();
         self.env.cycles_available = 0;
-        self.msg_reply = Some(CanisterReply::Reject {
+        self.msg_reply = Some(CallReply::Reject {
             rejection_code: RejectionCode::CanisterReject,
             rejection_message,
             cycles_refunded,

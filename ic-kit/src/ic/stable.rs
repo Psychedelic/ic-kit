@@ -1,6 +1,5 @@
 use ic_kit_sys::ic0;
-use std::error;
-use std::fmt;
+use ic_kit_sys::types::StableMemoryError;
 
 /// A type which represents either a page count or an offset in the stable storage, it's a u64
 /// when the `experimental-stable64` feature is enabled, otherwise a u32.
@@ -11,26 +10,6 @@ pub type StableSize = u64;
 /// when the `experimental-stable64` feature is enabled, otherwise a u32.
 #[cfg(not(feature = "experimental-stable64"))]
 pub type StableSize = u32;
-
-/// A possible error value when dealing with stable memory.
-#[derive(Debug)]
-pub enum StableMemoryError {
-    /// No more stable memory could be allocated.
-    OutOfMemory,
-    /// Attempted to read more stable memory than had been allocated.
-    OutOfBounds,
-}
-
-impl fmt::Display for StableMemoryError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            Self::OutOfMemory => f.write_str("Out of memory"),
-            Self::OutOfBounds => f.write_str("Read exceeds allocated memory"),
-        }
-    }
-}
-
-impl error::Error for StableMemoryError {}
 
 /// Returns the current size of the stable memory in WebAssembly pages.
 /// Note: One WebAssembly page is 64KiB

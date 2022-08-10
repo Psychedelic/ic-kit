@@ -1,11 +1,10 @@
 /// Provides utility methods to deal with stable storage on your canister.
 // This file is copied from ic_cdk, but changed so that it works with IC-Kit.
-use crate::ic::{
-    stable_bytes, stable_grow, stable_read, stable_size, stable_write, StableMemoryError,
-    StableSize,
-};
+use crate::ic::{stable_bytes, stable_grow, stable_read, stable_size, stable_write, StableSize};
 use candid::utils::{ArgumentDecoder, ArgumentEncoder};
 use std::io;
+
+pub use ic_kit_sys::types::StableMemoryError;
 
 /// A writer to the stable memory.
 ///

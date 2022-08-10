@@ -25,30 +25,25 @@ async fn fib(n: u64) -> u64 {
     a + b
 }
 
+canister_builder!(FibCanister { fib });
+
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::rt::types::{CanisterCall, RequestId};
-    use ic_kit::candid::{decode_one, encode_one};
 
     #[kit_test]
-    async fn x(replica: Replica) {
-        let canister_id = CanisterId::from_u64(124).into();
-        replica.add_canister(Canister::new(canister_id).with_method::<fib>());
+    async fn fib_6(replica: Replica) {
+        let canister = replica.add_canister(FibCanister::new(CanisterId::from_u64(12).into()));
 
-        let call = CanisterCall {
-            sender: Principal::from(CanisterId::from_u64(12)),
-            request_id: RequestId::new(),
-            callee: canister_id,
-            method: "fib".to_string(),
-            payment: 0,
-            arg: encode_one(6u64).unwrap(),
-        };
+        let fib_6 = canister
+            .new_call("fib")
+            .with_caller(*users::ALICE)
+            .with_arg(6u64)
+            .perform()
+            .await
+            .decode_one::<u64>()
+            .unwrap();
 
-        let response = replica.perform(call).await;
-        assert_eq!(
-            decode_one::<u64>(&response.to_result().unwrap()).unwrap(),
-            8
-        );
+        assert_eq!(fib_6, 8);
     }
 }

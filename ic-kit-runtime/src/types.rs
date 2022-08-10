@@ -1,3 +1,4 @@
+use ic_kit_sys::types::RejectionCode;
 use ic_types::Principal;
 use std::panic::RefUnwindSafe;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -61,20 +62,6 @@ pub struct Env {
     pub time: u64,
 }
 
-/// Rejection code from calling another canister.
-#[allow(missing_docs)]
-#[repr(i32)]
-#[derive(Debug, Clone, Copy)]
-pub enum RejectionCode {
-    NoError = 0,
-    SysFatal = 1,
-    SysTransient = 2,
-    DestinationInvalid = 3,
-    CanisterReject = 4,
-    CanisterError = 5,
-    Unknown,
-}
-
 /// A message sent to a canister that trigger execution of a task on the canister's execution thread
 /// based on the type of the message.
 pub enum Message {
@@ -126,62 +113,6 @@ impl From<CanisterCall> for Message {
                 .with_method_name(call.method)
                 .with_cycles_available(call.payment)
                 .with_args(call.arg),
-        }
-    }
-}
-
-/// A reply by the canister.
-#[derive(Debug)]
-pub enum CanisterReply {
-    Reply {
-        data: Vec<u8>,
-        cycles_refunded: u128,
-    },
-    Reject {
-        rejection_code: RejectionCode,
-        rejection_message: String,
-        cycles_refunded: u128,
-    },
-}
-
-impl CanisterReply {
-    /// Convert the reply to a message that can be delivered to a canister.
-    pub fn to_message(self, reply_to: OutgoingRequestId) -> Message {
-        match self {
-            CanisterReply::Reply {
-                data,
-                cycles_refunded,
-            } => Message::Reply {
-                reply_to,
-                env: Env::default()
-                    .with_entry_mode(EntryMode::ReplyCallback)
-                    .with_args(data)
-                    .with_cycles_refunded(cycles_refunded),
-            },
-            CanisterReply::Reject {
-                rejection_code,
-                rejection_message,
-                cycles_refunded,
-            } => Message::Reply {
-                reply_to,
-                env: Env::default()
-                    .with_entry_mode(EntryMode::RejectCallback)
-                    .with_cycles_refunded(cycles_refunded)
-                    .with_rejection_code(rejection_code)
-                    .with_rejection_message(rejection_message),
-            },
-        }
-    }
-
-    /// Convert the canister reply to a Result containing the raw data and the rejection code.
-    pub fn to_result(self) -> Result<Vec<u8>, (RejectionCode, String)> {
-        match self {
-            CanisterReply::Reply { data, .. } => Ok(data),
-            CanisterReply::Reject {
-                rejection_code,
-                rejection_message,
-                ..
-            } => Err((rejection_code, rejection_message)),
         }
     }
 }

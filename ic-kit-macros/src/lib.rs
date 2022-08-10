@@ -1,9 +1,9 @@
 mod entry;
 mod test;
 
-use crate::test::gen_test_code;
 use entry::{gen_entry_point_code, EntryPoint};
 use proc_macro::TokenStream;
+use test::gen_test_code;
 
 fn process_entry_point(
     entry_point: EntryPoint,

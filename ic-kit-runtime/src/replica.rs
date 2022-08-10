@@ -1,5 +1,7 @@
+use crate::call::{CallBuilder, CallReply};
 use crate::canister::Canister;
 use crate::types::*;
+use ic_kit_sys::types::RejectionCode;
 use ic_types::Principal;
 use std::collections::HashMap;
 use std::future::Future;
@@ -10,10 +12,15 @@ pub struct Replica {
     sender: mpsc::UnboundedSender<ReplicaMessage>,
 }
 
+pub struct CanisterHandle<'a> {
+    replica: &'a Replica,
+    canister_id: Principal,
+}
+
 /// A message we want to send to a canister.
 struct CanisterMessage {
     message: Message,
-    reply_sender: Option<oneshot::Sender<CanisterReply>>,
+    reply_sender: Option<oneshot::Sender<CallReply>>,
 }
 
 enum ReplicaMessage {
@@ -24,7 +31,7 @@ enum ReplicaMessage {
     CanisterRequest {
         canister_id: Principal,
         message: Message,
-        reply_sender: oneshot::Sender<CanisterReply>,
+        reply_sender: oneshot::Sender<CallReply>,
     },
     CanisterReply {
         canister_id: Principal,
@@ -45,23 +52,25 @@ impl Replica {
     }
 
     /// Add the given canister to this replica.
-    pub fn add_canister(&self, canister: Canister) {
+    pub fn add_canister(&self, canister: Canister) -> CanisterHandle {
+        let canister_id = canister.id();
+
         // Create a execution queue for the canister so we can send messages to the canister
         // asynchronously
         let replica_sender = self.sender.clone();
         let (tx, rx) = mpsc::unbounded_channel();
         replica_sender
             .send(ReplicaMessage::CanisterAdded {
-                canister_id: canister.id(),
+                canister_id,
                 channel: tx,
             })
             .unwrap_or_else(|_| panic!("ic-kit-runtime: could not send message to replica"));
 
         // Start the event loop for the canister.
         tokio::spawn(async move {
+            let canister_id = canister.id();
             let mut rx = rx;
             let mut canister = canister;
-            let canister_id = canister.id();
 
             while let Some(message) = rx.recv().await {
                 let perform_call = canister
@@ -105,6 +114,11 @@ impl Replica {
                 }
             }
         });
+
+        CanisterHandle {
+            replica: self,
+            canister_id,
+        }
     }
 
     /// Enqueue the given request to the destination canister.
@@ -112,7 +126,7 @@ impl Replica {
         &self,
         canister_id: Principal,
         message: Message,
-        reply_sender: oneshot::Sender<CanisterReply>,
+        reply_sender: oneshot::Sender<CallReply>,
     ) {
         self.sender
             .send(ReplicaMessage::CanisterRequest {
@@ -125,7 +139,7 @@ impl Replica {
 
     /// Perform the given call in this replica and return a future that will be resolved once the
     /// call is executed.
-    pub fn perform(&self, call: CanisterCall) -> impl Future<Output = CanisterReply> {
+    pub(crate) fn perform_call(&self, call: CanisterCall) -> impl Future<Output = CallReply> {
         let canister_id = call.callee;
         let message = Message::from(call);
         let (tx, rx) = oneshot::channel();
@@ -134,6 +148,12 @@ impl Replica {
             rx.await
                 .expect("ic-kit-runtime: Could not retrieve the response from the call.")
         }
+    }
+
+    /// Create a new call builder on the replica, that can be used to send a request to the given
+    /// canister.
+    pub fn new_call<S: Into<String>>(&self, id: Principal, method: S) -> CallBuilder {
+        CallBuilder::new(&self, id, method.into())
     }
 }
 
@@ -174,7 +194,7 @@ impl Default for Replica {
                             };
 
                             reply_sender
-                                .send(CanisterReply::Reject {
+                                .send(CallReply::Reject {
                                     rejection_code: RejectionCode::DestinationInvalid,
                                     rejection_message: format!(
                                         "Canister '{}' does not exists",
@@ -203,5 +223,12 @@ impl Default for Replica {
         });
 
         Replica { sender }
+    }
+}
+
+impl<'a> CanisterHandle<'a> {
+    /// Create a new call builder to call this canister.
+    pub fn new_call<S: Into<String>>(&self, method_name: S) -> CallBuilder {
+        CallBuilder::new(self.replica, self.canister_id, method_name.into())
     }
 }

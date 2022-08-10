@@ -1,4 +1,4 @@
-use proc_macro2::{Ident, Span, TokenStream};
+use proc_macro2::{Span, TokenStream};
 use quote::quote;
 use syn::spanned::Spanned;
 use syn::{parse2, Error, ItemFn};

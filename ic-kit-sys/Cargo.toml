@@ -1,6 +1,6 @@
 [package]
 name = "ic-kit-sys"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2021"
 authors = ["Parsa Ghadimi <i@parsa.ooo>"]
 description = "IC-Kit's API bindings to the Internet Computer's WASM runtime."
