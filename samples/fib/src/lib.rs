@@ -25,6 +25,7 @@ async fn fib(n: u64) -> u64 {
     a + b
 }
 
+#[cfg(not(target_family = "wasm"))]
 canister_builder!(FibCanister { fib });
 
 #[cfg(test)]
