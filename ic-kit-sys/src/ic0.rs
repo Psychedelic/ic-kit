@@ -1,4 +1,4 @@
-#[cfg(not(target_arch = "wasm32"))]
+#[cfg(not(target_family = "wasm"))]
 thread_local!(static HANDLER: std::cell::RefCell<Option<Box<dyn Ic0CallHandler>>> = std::cell::RefCell::new(None));
 
 /// Register a handler to be used for handling the canister call in non-wasm environments.
@@ -6,17 +6,11 @@ thread_local!(static HANDLER: std::cell::RefCell<Option<Box<dyn Ic0CallHandler>>
 /// # Panics
 ///
 /// If called from within a canister.
+#[cfg(not(target_family = "wasm"))]
 pub fn register_handler<H: Ic0CallHandler + 'static>(handler: H) {
-    #[cfg(not(target_arch = "wasm32"))]
     HANDLER.with(|c| {
         let _ = c.borrow_mut().insert(Box::new(handler));
     });
-
-    #[cfg(target_arch = "wasm32")]
-    {
-        let _ = handler;
-        panic!("This method is not usable inside the canister.")
-    }
 }
 
 macro_rules! _ic0_module_ret {
@@ -37,21 +31,184 @@ macro_rules! _ic0_module_ret {
 macro_rules! ic0_module {
     ( $(     ic0. $name: ident : ( $( $argname: ident : $argtype: ty ),* ) -> $rettype: tt ; )+ ) => {
         #[allow(improper_ctypes)]
-        #[cfg(target_arch = "wasm32")]
+        #[cfg(target_family = "wasm")]
         #[link(wasm_import_module = "ic0")]
         extern "C" {
             $(pub fn $name($( $argname: $argtype, )*) -> _ic0_module_ret!($rettype) ;)*
         }
 
         /// An object that implements mock handlers for ic0 WASM API calls.
+        #[cfg(not(target_family = "wasm"))]
         pub trait Ic0CallHandler {
             $(
             fn $name(&mut self, $($argname: $argtype,)*) -> _ic0_module_ret!($rettype);
             )*
         }
 
+        /// The runtime module provides the tools to have the canister in one thread and communicate
+        /// with another handler on another thread.
+        #[cfg(not(target_family = "wasm"))]
+        pub mod runtime {
+            use futures::executor::block_on;
+            use super::Ic0CallHandler;
+
+            /// A response from the runtime to the canister.
+            #[derive(Debug)]
+            pub enum Response {
+                None,
+                Isize(isize),
+                I32(i32),
+                I64(i64),
+                Trap(String),
+            }
+
+            impl From<()> for Response {
+                #[inline(always)]
+                fn from(_: ()) -> Self {
+                    Response::None
+                }
+            }
+
+            impl Into<()> for Response {
+                #[inline(always)]
+                fn into(self) -> () {
+                    match self {
+                        Response::None => (),
+                        Response::Trap(m) => panic!("Canister trapped: {}", m),
+                        _ => panic!("unexpected type cast."),
+                    }
+                }
+            }
+
+            impl From<isize> for Response {
+                #[inline(always)]
+                fn from(n: isize) -> Self {
+                    Response::Isize(n)
+                }
+            }
+
+            impl Into<isize> for Response {
+                #[inline(always)]
+                fn into(self) -> isize {
+                    match self {
+                        Response::Isize(n) => n,
+                        Response::Trap(m) => panic!("Canister trapped: {}", m),
+                        _ => panic!("unexpected type cast."),
+                    }
+                }
+            }
+
+            impl From<i32> for Response {
+                #[inline(always)]
+                fn from(n: i32) -> Self {
+                    Response::I32(n)
+                }
+            }
+
+            impl Into<i32> for Response {
+                #[inline(always)]
+                fn into(self) -> i32 {
+                    match self {
+                        Response::I32(n) => n,
+                        Response::Trap(m) => panic!("Canister trapped: {}", m),
+                        _ => panic!("unexpected type cast."),
+                    }
+                }
+            }
+
+            impl From<i64> for Response {
+                #[inline(always)]
+                fn from(n: i64) -> Self {
+                    Response::I64(n)
+                }
+            }
+
+            impl Into<i64> for Response {
+                #[inline(always)]
+                fn into(self) -> i64 {
+                    match self {
+                        Response::I64(n) => n,
+                        Response::Trap(m) => panic!("Canister trapped: {}", m),
+                        _ => panic!("unexpected type cast."),
+                    }
+                }
+            }
+
+            impl From<String> for Response {
+                #[inline(always)]
+                fn from(m: String) -> Self {
+                    Response::Trap(m)
+                }
+            }
+
+            /// The Ic0CallHandler on the main thread.
+            pub trait Ic0CallHandlerProxy {
+                $(
+                fn $name(&mut self, $($argname: $argtype,)*) -> Result<_ic0_module_ret!($rettype), String>;
+                )*
+            }
+
+            /// A request from the canister to the handler.
+            #[derive(Debug)]
+            #[allow(non_camel_case_types)]
+            pub enum Request {
+                $(
+                $name {
+                    $($argname: $argtype,)*
+                },
+                )*
+            }
+
+            impl Request {
+                /// Forward a request to a proxy
+                #[inline(always)]
+                pub fn proxy<H: Ic0CallHandlerProxy>(self, handler: &mut H) -> Response {
+                    match self {
+                        $(
+                        Request::$name { $($argname,)* } => handler.$name($($argname,)*)
+                            .map(Response::from)
+                            .unwrap_or_else(Response::from),
+                        )*
+                    }
+                }
+            }
+
+            /// A [`Ic0CallHandler`] that uses tokio mpsc channels to proxy system api calls
+            /// to another handler in another thread.
+            pub struct RuntimeHandle {
+                rx: tokio::sync::mpsc::Receiver<Response>,
+                tx: tokio::sync::mpsc::Sender<Request>,
+            }
+
+            impl RuntimeHandle {
+                pub fn new(
+                    rx: tokio::sync::mpsc::Receiver<Response>,
+                    tx: tokio::sync::mpsc::Sender<Request>,
+                ) -> Self {
+                    Self {
+                        rx,
+                        tx
+                    }
+                }
+            }
+
+            impl Ic0CallHandler for RuntimeHandle {
+                $(
+                fn $name(&mut self, $($argname: $argtype,)*) -> _ic0_module_ret!($rettype) {
+                    block_on(async {
+                        self.tx
+                            .send(Request::$name {$($argname,)*})
+                            .await
+                            .expect("ic-kit-runtime: Failed to send message from canister thread.");
+                        self.rx.recv().await.expect("Channel closed").into()
+                    })
+                }
+                )*
+            }
+        }
+
         $(
-        #[cfg(not(target_arch = "wasm32"))]
+        #[cfg(not(target_family = "wasm"))]
         pub unsafe fn $name($( $argname: $argtype, )*) -> _ic0_module_ret!($rettype) {
             HANDLER.with(|handler| {
                 std::cell::RefMut::map(handler.borrow_mut(), |h| {
@@ -66,6 +223,8 @@ macro_rules! ic0_module {
 
 // Copy-paste the spec section of the API here.
 // https://github.com/dfinity/interface-spec/blob/master/spec/ic0.txt
+// But change any i32 which is an address space to an isize, so we can work with this even when
+// on 64bit non-wasm runtimes.
 //
 // The comment after each function lists from where these functions may be invoked:
 // I: from canister_init or canister_post_upgrade
@@ -80,69 +239,69 @@ macro_rules! ic0_module {
 // H: from canister_heartbeat
 // * = I G U Q Ry Rt C F H (NB: Not (start))
 ic0_module! {
-    ic0.msg_arg_data_size : () -> i32;                                          // I U Q Ry F
-    ic0.msg_arg_data_copy : (dst : i32, offset : i32, size : i32) -> ();        // I U Q Ry F
-    ic0.msg_caller_size : () -> i32;                                            // I G U Q F
-    ic0.msg_caller_copy : (dst : i32, offset: i32, size : i32) -> ();           // I G U Q F
-    ic0.msg_reject_code : () -> i32;                                            // Ry Rt
-    ic0.msg_reject_msg_size : () -> i32;                                        // Rt
-    ic0.msg_reject_msg_copy : (dst : i32, offset : i32, size : i32) -> ();      // Rt
+    ic0.msg_arg_data_size : () -> isize;                                               // I U Q Ry F
+    ic0.msg_arg_data_copy : (dst : isize, offset : isize, size : isize) -> ();         // I U Q Ry F
+    ic0.msg_caller_size : () -> isize;                                                 // I G U Q F
+    ic0.msg_caller_copy : (dst : isize, offset: isize, size : isize) -> ();            // I G U Q F
+    ic0.msg_reject_code : () -> i32;                                                   // Ry Rt
+    ic0.msg_reject_msg_size : () -> isize;                                             // Rt
+    ic0.msg_reject_msg_copy : (dst : isize, offset : isize, size : isize) -> ();       // Rt
 
-    ic0.msg_reply_data_append : (src : i32, size : i32) -> ();                  // U Q Ry Rt
-    ic0.msg_reply : () -> ();                                                   // U Q Ry Rt
-    ic0.msg_reject : (src : i32, size : i32) -> ();                             // U Q Ry Rt
+    ic0.msg_reply_data_append : (src : isize, size : isize) -> ();                     // U Q Ry Rt
+    ic0.msg_reply : () -> ();                                                          // U Q Ry Rt
+    ic0.msg_reject : (src : isize, size : isize) -> ();                                // U Q Ry Rt
 
-    ic0.msg_cycles_available : () -> i64;                                       // U Rt Ry
-    ic0.msg_cycles_available128 : (dst : i32) -> ();                            // U Rt Ry
-    ic0.msg_cycles_refunded : () -> i64;                                        // Rt Ry
-    ic0.msg_cycles_refunded128 : (dst : i32) -> ();                             // Rt Ry
-    ic0.msg_cycles_accept : (max_amount : i64) -> (amount : i64);               // U Rt Ry
-    ic0.msg_cycles_accept128 : (max_amount_high : i64, max_amount_low: i64, dst : i32)
-                           -> ();                                               // U Rt Ry
+    ic0.msg_cycles_available : () -> i64;                                              // U Rt Ry
+    ic0.msg_cycles_available128 : (dst : isize) -> ();                                 // U Rt Ry
+    ic0.msg_cycles_refunded : () -> i64;                                               // Rt Ry
+    ic0.msg_cycles_refunded128 : (dst : isize) -> ();                                  // Rt Ry
+    ic0.msg_cycles_accept : (max_amount : i64) -> (amount : i64);                      // U Rt Ry
+    ic0.msg_cycles_accept128 : (max_amount_high : i64, max_amount_low: i64, dst : isize)
+                           -> ();                                                      // U Rt Ry
 
-    ic0.canister_self_size : () -> i32;                                         // *
-    ic0.canister_self_copy : (dst : i32, offset : i32, size : i32) -> ();       // *
-    ic0.canister_cycle_balance : () -> i64;                                     // *
-    ic0.canister_cycle_balance128 : (dst : i32) -> ();                          // *
-    ic0.canister_status : () -> i32;                                            // *
+    ic0.canister_self_size : () -> isize;                                              // *
+    ic0.canister_self_copy : (dst : isize, offset : isize, size : isize) -> ();        // *
+    ic0.canister_cycle_balance : () -> i64;                                            // *
+    ic0.canister_cycle_balance128 : (dst : isize) -> ();                               // *
+    ic0.canister_status : () -> i32;                                                   // *
 
-    ic0.msg_method_name_size : () -> i32;                                       // F
-    ic0.msg_method_name_copy : (dst : i32, offset : i32, size : i32) -> ();     // F
-    ic0.accept_message : () -> ();                                              // F
+    ic0.msg_method_name_size : () -> isize;                                            // F
+    ic0.msg_method_name_copy : (dst : isize, offset : isize, size : isize) -> ();      // F
+    ic0.accept_message : () -> ();                                                     // F
 
-    ic0.call_new :                                                              // U Ry Rt H
-      ( callee_src  : i32,
-        callee_size : i32,
-        name_src : i32,
-        name_size : i32,
-        reply_fun : i32,
-        reply_env : i32,
-        reject_fun : i32,
-        reject_env : i32
+    ic0.call_new :                                                                     // U Ry Rt H
+      ( callee_src  : isize,
+        callee_size : isize,
+        name_src : isize,
+        name_size : isize,
+        reply_fun : isize,
+        reply_env : isize,
+        reject_fun : isize,
+        reject_env : isize
       ) -> ();
-    ic0.call_on_cleanup : (fun : i32, env : i32) -> ();                         // U Ry Rt H
-    ic0.call_data_append : (src : i32, size : i32) -> ();                       // U Ry Rt H
-    ic0.call_cycles_add : (amount : i64) -> ();                                 // U Ry Rt H
-    ic0.call_cycles_add128 : (amount_high : i64, amount_low: i64) -> ();        // U Ry Rt H
-    ic0.call_perform : () -> ( err_code : i32 );                                // U Ry Rt H
+    ic0.call_on_cleanup : (fun : isize, env : isize) -> ();                            // U Ry Rt H
+    ic0.call_data_append : (src : isize, size : isize) -> ();                          // U Ry Rt H
+    ic0.call_cycles_add : (amount : i64) -> ();                                        // U Ry Rt H
+    ic0.call_cycles_add128 : (amount_high : i64, amount_low: i64) -> ();               // U Ry Rt H
+    ic0.call_perform : () -> ( err_code : i32 );                                       // U Ry Rt H
 
-    ic0.stable_size : () -> (page_count : i32);                                 // *
-    ic0.stable_grow : (new_pages : i32) -> (old_page_count : i32);              // *
-    ic0.stable_write : (offset : i32, src : i32, size : i32) -> ();             // *
-    ic0.stable_read : (dst : i32, offset : i32, size : i32) -> ();              // *
-    ic0.stable64_size : () -> (page_count : i64);                               // *
-    ic0.stable64_grow : (new_pages : i64) -> (old_page_count : i64);            // *
-    ic0.stable64_write : (offset : i64, src : i64, size : i64) -> ();           // *
-    ic0.stable64_read : (dst : i64, offset : i64, size : i64) -> ();            // *
+    ic0.stable_size : () -> (page_count : i32);                                        // *
+    ic0.stable_grow : (new_pages : i32) -> (old_page_count : i32);                     // *
+    ic0.stable_write : (offset : i32, src : isize, size : isize) -> ();                // *
+    ic0.stable_read : (dst : isize, offset : i32, size : isize) -> ();                 // *
+    ic0.stable64_size : () -> (page_count : i64);                                      // *
+    ic0.stable64_grow : (new_pages : i64) -> (old_page_count : i64);                   // *
+    ic0.stable64_write : (offset : i64, src : i64, size : i64) -> ();                  // *
+    ic0.stable64_read : (dst : i64, offset : i64, size : i64) -> ();                   // *
 
-    ic0.certified_data_set : (src: i32, size: i32) -> ();                       // I G U Ry Rt H
-    ic0.data_certificate_present : () -> i32;                                   // *
-    ic0.data_certificate_size : () -> i32;                                      // *
-    ic0.data_certificate_copy : (dst: i32, offset: i32, size: i32) -> ();       // *
+    ic0.certified_data_set : (src: isize, size: isize) -> ();                          // I G U Ry Rt H
+    ic0.data_certificate_present : () -> i32;                                          // *
+    ic0.data_certificate_size : () -> isize;                                           // *
+    ic0.data_certificate_copy : (dst: isize, offset: isize, size: isize) -> ();        // *
 
-    ic0.time : () -> (timestamp : i64);                                         // *
-    ic0.performance_counter : (counter_type : i32) -> (counter : i64);          // * s
+    ic0.time : () -> (timestamp : i64);                                                // *
+    ic0.performance_counter : (counter_type : i32) -> (counter : i64);                 // * s
 
-    ic0.debug_print : (src : i32, size : i32) -> ();                            // * s
-    ic0.trap : (src : i32, size : i32) -> ();                                   // * s
+    ic0.debug_print : (src : isize, size : isize) -> ();                               // * s
+    ic0.trap : (src : isize, size : isize) -> ();                                      // * s
 }

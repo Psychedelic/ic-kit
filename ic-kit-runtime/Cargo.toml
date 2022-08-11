@@ -1,18 +1,29 @@
 [package]
-name = "ic-kit-sys"
-version = "0.1.2"
+name = "ic-kit-runtime"
+version = "0.1.0-alpha.0"
 edition = "2021"
 authors = ["Parsa Ghadimi <i@parsa.ooo>"]
-description = "IC-Kit's API bindings to the Internet Computer's WASM runtime."
+description = "IC-Kit's Canister Simulator"
 license = "GPL-3.0"
 repository = "https://github.com/Psychedelic/ic-kit"
-documentation = "https://docs.rs/ic-kit-sys"
+documentation = "https://docs.rs/ic-kit-runtime"
 categories = ["api-bindings", "development-tools::testing"]
 keywords = ["internet-computer", "canister", "cdk", "fleek"]
 include = ["src", "Cargo.toml", "README.md"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[dependencies]
+cfg-if = "0.1"
+
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-tokio = {version="1.20", features=["sync"]}
-futures = {version="0.3"}
+ic-kit-sys = {path="../ic-kit-sys", version="0.1.2"}
+ic-types = "0.4.1"
+tokio = {version="1.20", features=["sync", "macros", "rt"]}
+thread-local-panic-hook = "0.1.0"
+lazy_static = "1.4"
+memmap = "0.7.0"
+futures = "0.3"
+actix = "0.13"
+candid = "0.7"
+serde = "1.0"

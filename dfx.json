@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "dfx": "0.11.0",
+  "canisters": {
+    "counter": {
+      "candid": "examples/counter/candid.did",
+      "package": "ic_kit_example_counter",
+      "type": "rust"
+    },
+    "fib": {
+      "candid": "examples/fib/candid.did",
+      "package": "ic_kit_example_fib",
+      "type": "rust"
+    },
+    "naming_system": {
+      "candid": "examples/naming_system/candid.did",
+      "package": "naming_system",
+      "type": "rust"
+    }
+  },
+  "networks": {
+    "local": {
+      "bind": "127.0.0.1:8000",
+      "type": "ephemeral"
+    }
+  }
+}

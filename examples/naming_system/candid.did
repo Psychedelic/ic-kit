@@ -1,0 +1,4 @@
+service : {
+  get_name : (principal) -> (opt text) query;
+  register : (text) -> ();
+}

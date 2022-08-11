@@ -1,0 +1,5 @@
+service : {
+  get_counter : () -> (nat64) query;
+  increment : () -> (nat64);
+  increment_by : (nat8) -> (nat64);
+}
