@@ -3,13 +3,18 @@
   "dfx": "0.11.0",
   "canisters": {
     "counter": {
-      "candid": "samples/counter/src/candid.did",
+      "candid": "samples/counter/candid.did",
       "package": "ic_kit_example_counter",
       "type": "rust"
     },
     "fib": {
-      "candid": "samples/counter/src/candid.did",
+      "candid": "samples/fib/candid.did",
       "package": "ic_kit_example_fib",
+      "type": "rust"
+    },
+    "naming_system": {
+      "candid": "samples/naming_system/candid.did",
+      "package": "naming_system",
       "type": "rust"
     }
   },
@@ -20,4 +25,3 @@
     }
   }
 }
-

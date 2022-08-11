@@ -245,12 +245,16 @@ impl Canister {
                 );
 
                 let entry_point_name = env.get_entry_point_name();
-                let task = self.symbol_table.get(&entry_point_name).map(|f| {
-                    let f = f.clone();
-                    Box::new(move || {
-                        f();
-                    }) as Box<dyn Fn() + Send + RefUnwindSafe>
-                });
+                let task = self
+                    .symbol_table
+                    .get(&entry_point_name)
+                    .or_else(|| self.symbol_table.get(&env.get_possible_entry_point_name()))
+                    .map(|f| {
+                        let f = f.clone();
+                        Box::new(move || {
+                            f();
+                        }) as Box<dyn Fn() + Send + RefUnwindSafe>
+                    });
 
                 (request_id, env, task)
             }

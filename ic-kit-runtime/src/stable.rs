@@ -7,11 +7,11 @@ pub trait StableMemoryBackend {
 }
 
 /// An stable storage backend that uses a mapped file under the hood to provide the storage space.
-struct FileSystemStableMemory {
-    file: MmapMut,
+pub struct FileSystemStableMemory {
+    _file: MmapMut,
 }
 
 /// An stable storage backend that stores everything in the heap.
-struct HeapStableMemory {
-    data: Vec<u8>,
+pub struct HeapStableMemory {
+    _data: Vec<u8>,
 }

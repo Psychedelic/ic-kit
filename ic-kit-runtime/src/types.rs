@@ -217,6 +217,23 @@ impl Env {
             EntryMode::CustomTask => "ic-kit: custom".to_string(),
         }
     }
+
+    /// Returns the second possible name of this entry point.
+    pub fn get_possible_entry_point_name(&self) -> String {
+        match &self.entry_mode {
+            EntryMode::Update => {
+                format!(
+                    "canister_query {}",
+                    self.method_name.as_ref().unwrap_or(&String::new())
+                )
+            }
+            EntryMode::Query => format!(
+                "canister_update {}",
+                self.method_name.as_ref().unwrap_or(&String::new())
+            ),
+            _ => self.get_entry_point_name(),
+        }
+    }
 }
 
 pub struct CanisterId(Principal);

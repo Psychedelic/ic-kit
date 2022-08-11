@@ -184,6 +184,32 @@ impl CallReply {
             } => *cycles_refunded,
         }
     }
+
+    /// Returns true if the call was okay.
+    pub fn is_ok(&self) -> bool {
+        match &self {
+            CallReply::Reply { .. } => true,
+            CallReply::Reject { .. } => false,
+        }
+    }
+
+    /// Returns true if the call was rejected.
+    pub fn is_error(&self) -> bool {
+        match &self {
+            CallReply::Reply { .. } => false,
+            CallReply::Reject { .. } => true,
+        }
+    }
+
+    /// Assert the response is okay.
+    pub fn assert_ok(&self) {
+        assert!(self.is_ok(), "The call was rejected.");
+    }
+
+    /// Assert the response is a rejection.
+    pub fn assert_error(&self) {
+        assert!(self.is_error(), "Expected a rejection, but got a reply.");
+    }
 }
 
 impl<'a> From<&'a CallReply> for Result<&'a [u8], CallError> {

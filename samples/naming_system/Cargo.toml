@@ -1,5 +1,5 @@
 [package]
-name = "ic_kit_example_fib"
+name = "ic_kit_example_naming_system"
 version = "0.1.0"
 edition = "2021"
 

@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "samples/counter",
+    "samples/naming_system",
     "samples/fib",
     "ic-kit",
     "ic-kit-sys",

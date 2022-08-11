@@ -167,6 +167,14 @@ impl Default for Replica {
 
             while let Some(m) = rx.recv().await {
                 match m {
+                    ReplicaMessage::CanisterAdded { canister_id, .. }
+                        if canisters.contains_key(&canister_id) =>
+                    {
+                        panic!(
+                            "Canister '{}' is already defined in the replica.",
+                            canister_id
+                        )
+                    }
                     ReplicaMessage::CanisterAdded {
                         canister_id,
                         channel,

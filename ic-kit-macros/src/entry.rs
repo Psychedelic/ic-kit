@@ -59,11 +59,14 @@ struct Config {
     guard: Option<String>,
 }
 
-fn collect_args(entry_point: EntryPoint, signature: &Signature) -> Result<Vec<Ident>, Error> {
+fn collect_args(
+    entry_point: EntryPoint,
+    signature: &Signature,
+) -> Result<Vec<(Ident, Type)>, Error> {
     let mut args = Vec::new();
 
     for (id, arg) in signature.inputs.iter().enumerate() {
-        let ident = match arg {
+        let (ident, ty) = match arg {
             FnArg::Receiver(r) => {
                 return Err(Error::new(
                     r.span(),
@@ -73,16 +76,16 @@ fn collect_args(entry_point: EntryPoint, signature: &Signature) -> Result<Vec<Id
                     ),
                 ))
             }
-            FnArg::Typed(PatType { pat, .. }) => {
+            FnArg::Typed(PatType { pat, ty, .. }) => {
                 if let Pat::Ident(PatIdent { ident, .. }) = pat.as_ref() {
-                    ident.clone()
+                    (ident.clone(), *ty.clone())
                 } else {
-                    Ident::new(&format!("arg_{}", id), pat.span())
+                    (Ident::new(&format!("arg_{}", id), pat.span()), *ty.clone())
                 }
             }
         };
 
-        args.push(ident)
+        args.push((ident, ty));
     }
 
     Ok(args)
@@ -107,7 +110,7 @@ pub fn gen_entry_point_code(
     let is_async = signature.asyncness.is_some();
     let name = &signature.ident;
 
-    if !generics.params.is_empty() {
+    if !generics.params.is_empty() && is_async {
         return Err(Error::new(
             generics.span(),
             format!(
@@ -186,12 +189,15 @@ pub fn gen_entry_point_code(
     };
 
     // Build the outer function's body.
-    let arg_tuple: Vec<Ident> = collect_args(entry_point, signature)?;
-    let arg_count = arg_tuple.len();
+    let tmp = di(collect_args(entry_point, signature)?, is_async)?;
+    let args = tmp.args;
+    let (can_args, _): (Vec<_>, Vec<_>) = tmp.can_args.into_iter().unzip();
+    let (imu_args, imu_types): (Vec<_>, Vec<_>) = tmp.imu_args.into_iter().unzip();
+    let (mut_args, mut_types): (Vec<_>, Vec<_>) = tmp.mut_args.into_iter().unzip();
 
     // If the method does not accept any arguments, don't even read the msg_data, and if the
     // deserialization fails, just reject the message, which is cheaper than trap.
-    let arg_decode = if arg_count == 0 {
+    let arg_decode = if can_args.len() == 0 {
         quote! {}
     } else {
         quote! {
@@ -203,7 +209,7 @@ pub fn gen_entry_point_code(
                     return;
                 },
             };
-            let ( #( #arg_tuple, )* ) = args;
+            let ( #( #can_args, )* ) = args;
         }
     };
 
@@ -236,20 +242,53 @@ pub fn gen_entry_point_code(
         }
     };
 
+    // Because DI doesn't work on an async method.
+    let mut sync_result = quote! {
+        let result = #name ( #(#args),* );
+        #return_encode
+    };
+
+    sync_result = match imu_args.len() {
+        0 => sync_result,
+        1 => quote! {
+            ic_kit::ic::with(|#(#imu_args: &#imu_types),*| {
+                #sync_result
+            });
+        },
+        _ => quote! {
+            ic_kit::ic::with_many(|(#(#imu_args),*) : (#(&#imu_types),*)| {
+                #sync_result
+            });
+        },
+    };
+
+    sync_result = match mut_args.len() {
+        0 => sync_result,
+        1 => quote! {
+            ic_kit::ic::with_mut(|#(#mut_args: &mut #mut_types),*| {
+                #sync_result
+            });
+        },
+        _ => quote! {
+            ic_kit::ic::with_many_mut(|(#(#mut_args),*) : (#(&mut #mut_types),*)| {
+                #sync_result
+            });
+        },
+    };
+
     // only spawn for async methods.
     let body = if is_async {
         quote! {
             ic_kit::ic::spawn(async {
                 #arg_decode
-                let result = #name ( #(#arg_tuple),* ).await;
+                let result = #name ( #(#args),* ).await;
                 #return_encode
-            })
+            });
         }
     } else {
         quote! {
             #arg_decode
-            let result = #name ( #(#arg_tuple),* );
-            #return_encode
+            #sync_result;
         }
     };
 
@@ -281,4 +320,46 @@ pub fn gen_entry_point_code(
         #[inline(always)]
         #item
     })
+}
+
+#[derive(Default)]
+struct ProcessedArgs {
+    args: Vec<Ident>,
+    mut_args: Vec<(Ident, Type)>,
+    imu_args: Vec<(Ident, Type)>,
+    can_args: Vec<(Ident, Type)>,
+}
+
+fn di(args: Vec<(Ident, Type)>, is_async: bool) -> Result<ProcessedArgs, Error> {
+    let mut result = ProcessedArgs::default();
+
+    for (ident, ty) in args {
+        result.args.push(ident.clone());
+
+        match ty {
+            Type::Reference(ty_ref) if is_async => {
+                return Err(Error::new(
+                    ty_ref.span(),
+                    format!("IC-Kit's dependency injection can only work on sync methods."),
+                ));
+            }
+            Type::Reference(ty_ref) if !result.can_args.is_empty() => {
+                return Err(Error::new(
+                    ty_ref.span(),
+                    format!("An IC-kit dependency injected reference could only come before canister arguments."),
+                ));
+            }
+            Type::Reference(ty_ref) if ty_ref.mutability.is_some() => {
+                result.mut_args.push((ident, *ty_ref.elem));
+            }
+            Type::Reference(ty_ref) => {
+                result.imu_args.push((ident, *ty_ref.elem));
+            }
+            ty => {
+                result.can_args.push((ident, ty));
+            }
+        }
+    }
+
+    Ok(result)
 }

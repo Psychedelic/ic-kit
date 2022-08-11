@@ -20,35 +20,83 @@ impl Counter {
 }
 
 #[update]
-pub fn increment() -> u64 {
-    println!("Running increment.");
-    with_mut(Counter::increment)
+pub fn increment(counter: &mut Counter) -> u64 {
+    counter.increment()
 }
 
-#[test]
-fn x() {
-    use ic_kit::rt;
-    use ic_kit::rt::types::*;
-    use rt::types::CanisterId;
+#[update]
+pub fn increment_by(counter: &mut Counter, n: u8) -> u64 {
+    counter.increment_by(n)
+}
 
-    let rt = tokio::runtime::Builder::new_current_thread()
-        .build()
-        .unwrap();
+#[query]
+pub fn get_counter(counter: &Counter) -> u64 {
+    counter.number
+}
 
-    rt.block_on(async {
-        let canister_id = CanisterId::from_u64(124).into();
-        let canister = rt::canister::Canister::new(canister_id).with_method::<increment>();
-        let replica = rt::replica::Replica::new(vec![canister]);
+#[cfg(not(target_family = "wasm"))]
+canister_builder!(CounterCanister {
+    increment,
+    increment_by,
+    get_counter
+});
 
-        let call = CanisterCall {
-            request_id: RequestId::new(),
-            callee: canister_id,
-            method: "increment".to_string(),
-            payment: 0,
-            arg: Vec::from(ic::CANDID_EMPTY_ARG),
-        };
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-        let response = replica.perform(call).await;
-        println!("R = {:?}", response);
-    });
+    #[kit_test]
+    async fn test_increment(replica: Replica) {
+        let c = replica.add_canister(CounterCanister::anonymous());
+
+        let r = c
+            .new_call("increment")
+            .perform()
+            .await
+            .decode_one::<u64>()
+            .unwrap();
+
+        assert_eq!(r, 1);
+
+        assert_eq!(
+            c.new_call("get_counter")
+                .perform()
+                .await
+                .decode_one::<u64>()
+                .unwrap(),
+            1
+        );
+
+        let r = c
+            .new_call("increment")
+            .perform()
+            .await
+            .decode_one::<u64>()
+            .unwrap();
+
+        assert_eq!(r, 2);
+
+        assert_eq!(
+            c.new_call("get_counter")
+                .perform()
+                .await
+                .decode_one::<u64>()
+                .unwrap(),
+            2
+        );
+    }
+
+    #[kit_test]
+    async fn test_increment_by(replica: Replica) {
+        let c = replica.add_canister(CounterCanister::anonymous());
+        assert_eq!(
+            c.new_call("increment_by")
+                .with_arg(2u8)
+                .perform()
+                .await
+                .decode_one::<u64>()
+                .unwrap(),
+            2
+        );
+    }
 }
