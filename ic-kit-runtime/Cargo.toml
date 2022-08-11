@@ -1,6 +1,6 @@
 [package]
 name = "ic-kit-runtime"
-version = "0.0.1"
+version = "0.1.0-alpha.0"
 edition = "2021"
 authors = ["Parsa Ghadimi <i@parsa.ooo>"]
 description = "IC-Kit's Canister Simulator"
@@ -17,7 +17,7 @@ include = ["src", "Cargo.toml", "README.md"]
 cfg-if = "0.1"
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-ic-kit-sys = {path="../ic-kit-sys", version="0.1.1"}
+ic-kit-sys = {path="../ic-kit-sys", version="0.1.2"}
 ic-types = "0.4.1"
 tokio = {version="1.20", features=["sync", "macros", "rt"]}
 thread-local-panic-hook = "0.1.0"

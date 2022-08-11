@@ -9,7 +9,7 @@ use syn::{DeriveInput, Error};
 struct Method {
     mode: EntryPoint,
     rust_name: String,
-    arg_names: Vec<String>,
+    _arg_names: Vec<String>,
     arg_types: Vec<String>,
     rets: Vec<String>,
 }
@@ -43,7 +43,7 @@ pub(crate) fn declare(
     let method = Method {
         mode: entry_point,
         rust_name: rust_name.to_string(),
-        arg_names: can_args.iter().map(|i| i.to_string()).collect(),
+        _arg_names: can_args.iter().map(|i| i.to_string()).collect(),
         arg_types: can_types
             .iter()
             .map(|t| format!("{}", t.to_token_stream()))
