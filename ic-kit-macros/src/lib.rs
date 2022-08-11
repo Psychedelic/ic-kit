@@ -1,8 +1,10 @@
 mod entry;
+mod export_service;
 mod test;
 
 use entry::{gen_entry_point_code, EntryPoint};
 use proc_macro::TokenStream;
+use syn::parse_macro_input;
 use test::gen_test_code;
 
 fn process_entry_point(
@@ -63,4 +65,30 @@ pub fn kit_test(attr: TokenStream, item: TokenStream) -> TokenStream {
     gen_test_code(attr.into(), item.into())
         .unwrap_or_else(|error| error.to_compile_error())
         .into()
+}
+
+#[proc_macro_derive(KitCanister, attributes(candid_path))]
+pub fn kit_export(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as syn::DeriveInput);
+    let save_candid_path_result = get_save_candid_path(&input);
+
+    match save_candid_path_result {
+        Ok(save_candid_path) => export_service::export_service(input, save_candid_path).into(),
+        Err(e) => e.to_compile_error().into(),
+    }
+}
+
+fn get_save_candid_path(input: &syn::DeriveInput) -> syn::Result<Option<syn::LitStr>> {
+    let candid_path_helper_attribute_option = input
+        .attrs
+        .iter()
+        .find(|attr| attr.path.is_ident("candid_path"));
+
+    match candid_path_helper_attribute_option {
+        Some(candid_path_helper_attribute) => {
+            let custom_candid_path_lit: syn::LitStr = candid_path_helper_attribute.parse_args()?;
+            Ok(Some(custom_candid_path_lit))
+        }
+        None => Ok(None),
+    }
 }

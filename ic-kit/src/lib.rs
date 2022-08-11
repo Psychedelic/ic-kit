@@ -1,3 +1,4 @@
+mod canister;
 mod futures;
 mod setup;
 mod storage;
@@ -16,12 +17,17 @@ pub use candid::{self, CandidType, Nat, Principal};
 pub use ic_kit_macros as macros;
 pub use setup::setup_hooks;
 
+// The KitCanister derive macro.
+pub use canister::KitCanister;
+pub use ic_kit_macros::KitCanister;
+
 /// The IC-kit runtime, which can be used for testing the canister in non-wasm environments.
 #[cfg(not(target_family = "wasm"))]
 pub use ic_kit_runtime as rt;
 
 /// The famous prelude module which re exports the most useful methods.
 pub mod prelude {
+    pub use super::canister::KitCanister;
     pub use super::ic;
     pub use super::ic::CallBuilder;
     pub use super::ic::{balance, caller, id, spawn};

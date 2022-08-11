@@ -34,12 +34,9 @@ pub fn get_counter(counter: &Counter) -> u64 {
     counter.number
 }
 
-#[cfg(not(target_family = "wasm"))]
-canister_builder!(CounterCanister {
-    increment,
-    increment_by,
-    get_counter
-});
+#[derive(KitCanister)]
+#[candid_path("candid.did")]
+pub struct CounterCanister;
 
 #[cfg(test)]
 mod tests {

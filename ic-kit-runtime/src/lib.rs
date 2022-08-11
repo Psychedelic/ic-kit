@@ -11,18 +11,14 @@ cfg_if::cfg_if! {
         pub mod stable;
         pub mod types;
         pub mod users;
-        #[macro_use]
-        pub mod macros;
 
         pub use canister::{Canister, CanisterMethod};
         pub use replica::Replica;
         pub use tokio::runtime::Builder as TokioRuntimeBuilder;
 
         pub mod prelude {
-            pub use crate::canister::Canister;
             pub use crate::replica::Replica;
             pub use crate::users;
-            pub use canister_builder;
         }
     }
 }

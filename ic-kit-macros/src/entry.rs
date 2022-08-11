@@ -2,17 +2,15 @@
 //!
 //! [1]: <https://internetcomputer.org/docs/current/references/ic-interface-spec/#entry-points>
 
+use crate::export_service::declare;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
 use serde::Deserialize;
 use serde_tokenstream::from_tokenstream;
 use std::fmt::Formatter;
-use syn::{
-    parse2, spanned::Spanned, Error, FnArg, ItemFn, Pat, PatIdent, PatType, ReturnType, Signature,
-    Type,
-};
+use syn::{spanned::Spanned, Error};
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq)]
 pub enum EntryPoint {
     Init,
     PreUpgrade,
@@ -59,38 +57,6 @@ struct Config {
     guard: Option<String>,
 }
 
-fn collect_args(
-    entry_point: EntryPoint,
-    signature: &Signature,
-) -> Result<Vec<(Ident, Type)>, Error> {
-    let mut args = Vec::new();
-
-    for (id, arg) in signature.inputs.iter().enumerate() {
-        let (ident, ty) = match arg {
-            FnArg::Receiver(r) => {
-                return Err(Error::new(
-                    r.span(),
-                    format!(
-                        "#[{}] macro can not be used on a function with `self` as a parameter.",
-                        entry_point
-                    ),
-                ))
-            }
-            FnArg::Typed(PatType { pat, ty, .. }) => {
-                if let Pat::Ident(PatIdent { ident, .. }) = pat.as_ref() {
-                    (ident.clone(), *ty.clone())
-                } else {
-                    (Ident::new(&format!("arg_{}", id), pat.span()), *ty.clone())
-                }
-            }
-        };
-
-        args.push((ident, ty));
-    }
-
-    Ok(args)
-}
-
 /// Process a rust syntax and generate the code for processing it.
 pub fn gen_entry_point_code(
     entry_point: EntryPoint,
@@ -98,7 +64,7 @@ pub fn gen_entry_point_code(
     item: TokenStream,
 ) -> Result<TokenStream, Error> {
     let attrs = from_tokenstream::<Config>(&attr)?;
-    let fun: ItemFn = parse2::<ItemFn>(item.clone()).map_err(|e| {
+    let fun: syn::ItemFn = syn::parse2::<syn::ItemFn>(item.clone()).map_err(|e| {
         Error::new(
             item.span(),
             format!("#[{0}] must be above a function. \n{1}", entry_point, e),
@@ -110,28 +76,35 @@ pub fn gen_entry_point_code(
     let is_async = signature.asyncness.is_some();
     let name = &signature.ident;
 
-    if !generics.params.is_empty() && is_async {
+    let return_length = match &signature.output {
+        syn::ReturnType::Default => 0,
+        syn::ReturnType::Type(_, ty) => match ty.as_ref() {
+            syn::Type::Tuple(tuple) => tuple.elems.len(),
+            _ => 1,
+        },
+    };
+
+    if is_async && !generics.params.is_empty() {
         return Err(Error::new(
             generics.span(),
             format!(
-                "#[{}] must be above a function with no generic parameters.",
+                "#[{}] must be above a async function with no generic parameters.",
                 entry_point
             ),
         ));
     }
 
-    let return_length = match &signature.output {
-        ReturnType::Default => 0,
-        ReturnType::Type(_, ty) => match ty.as_ref() {
-            Type::Tuple(tuple) => tuple.elems.len(),
-            _ => 1,
-        },
-    };
-
     if entry_point.is_lifecycle() && !entry_point.is_inspect_message() && return_length > 0 {
         return Err(Error::new(
-            Span::call_site(),
+            signature.output.span(),
             format!("#[{}] function cannot have a return value.", entry_point),
+        ));
+    }
+
+    if entry_point.is_lifecycle() && attrs.name.is_some() {
+        return Err(Error::new(
+            Span::call_site(),
+            format!("#[{}] function cannot be renamed.", entry_point),
         ));
     }
 
@@ -145,14 +118,14 @@ pub fn gen_entry_point_code(
         ));
     }
 
-    if attrs.guard.is_some() && entry_point.is_lifecycle() {
+    if entry_point.is_lifecycle() && attrs.guard.is_some() {
         return Err(Error::new(
             Span::call_site(),
             format!("#[{}] function cannot have a guard", entry_point),
         ));
     }
 
-    if is_async && entry_point.is_lifecycle() {
+    if entry_point.is_lifecycle() && is_async {
         return Err(Error::new(
             Span::call_site(),
             format!("#[{}] function cannot be async.", entry_point),
@@ -178,20 +151,17 @@ pub fn gen_entry_point_code(
         quote! {}
     };
 
+    let candid_name = attrs.name.unwrap_or_else(|| name.to_string());
     let export_name = if entry_point.is_lifecycle() {
         format!("canister_{}", entry_point)
     } else {
-        format!(
-            "canister_{0} {1}",
-            entry_point,
-            attrs.name.unwrap_or_else(|| name.to_string())
-        )
+        format!("canister_{0} {1}", entry_point, candid_name)
     };
 
     // Build the outer function's body.
     let tmp = di(collect_args(entry_point, signature)?, is_async)?;
     let args = tmp.args;
-    let (can_args, _): (Vec<_>, Vec<_>) = tmp.can_args.into_iter().unzip();
+    let (can_args, can_types): (Vec<_>, Vec<_>) = tmp.can_args.into_iter().unzip();
     let (imu_args, imu_types): (Vec<_>, Vec<_>) = tmp.imu_args.into_iter().unzip();
     let (mut_args, mut_types): (Vec<_>, Vec<_>) = tmp.mut_args.into_iter().unzip();
 
@@ -292,6 +262,15 @@ pub fn gen_entry_point_code(
         }
     };
 
+    declare(
+        entry_point,
+        name.clone(),
+        candid_name,
+        can_args,
+        can_types,
+        &signature.output,
+    )?;
+
     Ok(quote! {
         #[doc(hidden)]
         #[allow(non_camel_case_types)]
@@ -325,34 +304,34 @@ pub fn gen_entry_point_code(
 #[derive(Default)]
 struct ProcessedArgs {
     args: Vec<Ident>,
-    mut_args: Vec<(Ident, Type)>,
-    imu_args: Vec<(Ident, Type)>,
-    can_args: Vec<(Ident, Type)>,
+    mut_args: Vec<(Ident, syn::Type)>,
+    imu_args: Vec<(Ident, syn::Type)>,
+    can_args: Vec<(Ident, syn::Type)>,
 }
 
-fn di(args: Vec<(Ident, Type)>, is_async: bool) -> Result<ProcessedArgs, Error> {
+fn di(args: Vec<(Ident, syn::Type)>, is_async: bool) -> Result<ProcessedArgs, Error> {
     let mut result = ProcessedArgs::default();
 
     for (ident, ty) in args {
         result.args.push(ident.clone());
 
         match ty {
-            Type::Reference(ty_ref) if is_async => {
+            syn::Type::Reference(ty_ref) if is_async => {
                 return Err(Error::new(
                     ty_ref.span(),
                     format!("IC-Kit's dependency injection can only work on sync methods."),
                 ));
             }
-            Type::Reference(ty_ref) if !result.can_args.is_empty() => {
+            syn::Type::Reference(ty_ref) if !result.can_args.is_empty() => {
                 return Err(Error::new(
                     ty_ref.span(),
                     format!("An IC-kit dependency injected reference could only come before canister arguments."),
                 ));
             }
-            Type::Reference(ty_ref) if ty_ref.mutability.is_some() => {
+            syn::Type::Reference(ty_ref) if ty_ref.mutability.is_some() => {
                 result.mut_args.push((ident, *ty_ref.elem));
             }
-            Type::Reference(ty_ref) => {
+            syn::Type::Reference(ty_ref) => {
                 result.imu_args.push((ident, *ty_ref.elem));
             }
             ty => {
@@ -362,4 +341,36 @@ fn di(args: Vec<(Ident, Type)>, is_async: bool) -> Result<ProcessedArgs, Error> 
     }
 
     Ok(result)
+}
+
+fn collect_args(
+    entry_point: EntryPoint,
+    signature: &syn::Signature,
+) -> Result<Vec<(Ident, syn::Type)>, Error> {
+    let mut args = Vec::new();
+
+    for (id, arg) in signature.inputs.iter().enumerate() {
+        let (ident, ty) = match arg {
+            syn::FnArg::Receiver(r) => {
+                return Err(Error::new(
+                    r.span(),
+                    format!(
+                        "#[{}] macro can not be used on a function with `self` as a parameter.",
+                        entry_point
+                    ),
+                ))
+            }
+            syn::FnArg::Typed(syn::PatType { pat, ty, .. }) => {
+                if let syn::Pat::Ident(syn::PatIdent { ident, .. }) = pat.as_ref() {
+                    (ident.clone(), *ty.clone())
+                } else {
+                    (Ident::new(&format!("arg_{}", id), pat.span()), *ty.clone())
+                }
+            }
+        };
+
+        args.push((ident, ty));
+    }
+
+    Ok(args)
 }

@@ -49,8 +49,9 @@ async fn fib_join(n: u64) -> u64 {
     a + b
 }
 
-#[cfg(not(target_family = "wasm"))]
-canister_builder!(FibCanister { fib, fib_join });
+#[derive(KitCanister)]
+#[candid_path("candid.did")]
+pub struct FibCanister;
 
 #[cfg(test)]
 mod test {

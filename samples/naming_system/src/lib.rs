@@ -22,8 +22,9 @@ fn get_name(registry: &Registry, user: Principal) -> Option<&String> {
     registry.names.get(&user)
 }
 
-#[cfg(not(target_family = "wasm"))]
-canister_builder!(NamingSystemCanister { register, get_name });
+#[derive(KitCanister)]
+#[candid_path("candid.did")]
+pub struct NamingSystemCanister;
 
 #[cfg(test)]
 mod tests {
