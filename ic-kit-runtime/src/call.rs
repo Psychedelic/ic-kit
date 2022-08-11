@@ -110,7 +110,7 @@ impl CallReply {
                 reply_to,
                 env: Env::default()
                     .with_entry_mode(EntryMode::ReplyCallback)
-                    .with_args(data)
+                    .with_raw_args(data)
                     .with_cycles_refunded(cycles_refunded),
             },
             CallReply::Reject {

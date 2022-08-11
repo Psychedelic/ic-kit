@@ -1,6 +1,8 @@
-use ic_kit_sys::types::RejectionCode;
+use candid::utils::ArgumentEncoder;
+use candid::{encode_args, encode_one, CandidType};
+use ic_kit_sys::types::{RejectionCode, CANDID_EMPTY_ARG};
 use ic_types::Principal;
-use std::panic::RefUnwindSafe;
+use std::panic::{RefUnwindSafe, UnwindSafe};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -40,6 +42,8 @@ pub enum EntryMode {
 
 /// The canister's environment that should be used during a message.
 pub struct Env {
+    /// Determines the canister' balance.
+    pub balance: u128,
     /// The type of the entry point that should be simulated, this enables trapping when a the
     /// method is calling a system api call that it should not be able to call during the
     /// execution of that entry point.
@@ -62,6 +66,8 @@ pub struct Env {
     pub time: u64,
 }
 
+pub type TaskFn = Box<dyn FnOnce() + Send + RefUnwindSafe + UnwindSafe>;
+
 /// A message sent to a canister that trigger execution of a task on the canister's execution thread
 /// based on the type of the message.
 pub enum Message {
@@ -70,7 +76,7 @@ pub enum Message {
         /// The request id of this incoming message.
         request_id: IncomingRequestId,
         /// the task handler that should be executed in the canister's execution thread.
-        task: Box<dyn Fn() + Send + RefUnwindSafe>,
+        task: TaskFn,
         /// The env to use for this custom execution.
         env: Env,
     },
@@ -112,7 +118,7 @@ impl From<CanisterCall> for Message {
                 .with_sender(call.sender)
                 .with_method_name(call.method)
                 .with_cycles_available(call.payment)
-                .with_args(call.arg),
+                .with_raw_args(call.arg),
         }
     }
 }
@@ -120,12 +126,13 @@ impl From<CanisterCall> for Message {
 impl Default for Env {
     fn default() -> Self {
         Env {
+            balance: 100_000_000_000_000,
             entry_mode: EntryMode::CustomTask,
             sender: Principal::anonymous(),
             method_name: None,
             cycles_available: 0,
             cycles_refunded: 0,
-            args: vec![],
+            args: CANDID_EMPTY_ARG.to_vec(),
             rejection_code: RejectionCode::NoError,
             rejection_message: String::new(),
             time: now(),
@@ -134,6 +141,46 @@ impl Default for Env {
 }
 
 impl Env {
+    /// Create a new env for an update call.
+    pub fn update<S: Into<String>>(method_name: S) -> Self {
+        Self::default()
+            .with_entry_mode(EntryMode::Update)
+            .with_method_name(method_name)
+    }
+
+    /// Create a new env for a query call.
+    pub fn query<S: Into<String>>(method_name: S) -> Self {
+        Self::default()
+            .with_entry_mode(EntryMode::Query)
+            .with_method_name(method_name)
+    }
+
+    /// Create a new env for a call to the init function.
+    pub fn init() -> Self {
+        Self::default().with_entry_mode(EntryMode::Init)
+    }
+
+    /// Create a new env for a call to the pre_upgrade function.
+    pub fn pre_upgrade() -> Self {
+        Self::default().with_entry_mode(EntryMode::PreUpgrade)
+    }
+
+    /// Create a new env for a call to the post_upgrade function.
+    pub fn post_upgrade() -> Self {
+        Self::default().with_entry_mode(EntryMode::PostUpgrade)
+    }
+
+    /// Create a new env for a call to the heartbeat function.
+    pub fn heartbeat() -> Self {
+        Self::default().with_entry_mode(EntryMode::Heartbeat)
+    }
+
+    /// Determines the canister's cycle balance for this call.
+    pub fn with_balance(mut self, balance: u128) -> Self {
+        self.balance = balance;
+        self
+    }
+
     /// Use the provided time for this env.
     pub fn with_time(mut self, time: u64) -> Self {
         self.time = time;
@@ -173,8 +220,20 @@ impl Env {
 
     /// The arguments in this environment, in a reply mode this is the data returned to the
     /// canister.
-    pub fn with_args<A: Into<Vec<u8>>>(mut self, argument: A) -> Self {
+    pub fn with_raw_args<A: Into<Vec<u8>>>(mut self, argument: A) -> Self {
         self.args = argument.into();
+        self
+    }
+
+    /// Encode the provided tuple using candid and use it as arguments during this execution.
+    pub fn with_args<T: ArgumentEncoder>(mut self, arguments: T) -> Self {
+        self.args = encode_args(arguments).unwrap();
+        self
+    }
+
+    /// Shorthand for `with_args((argument, ))` to pass tuples with only one element to the call.
+    pub fn with_arg<T: CandidType>(mut self, argument: T) -> Self {
+        self.args = encode_one(argument).unwrap();
         self
     }
 
@@ -233,63 +292,6 @@ impl Env {
             ),
             _ => self.get_entry_point_name(),
         }
-    }
-}
-
-pub struct CanisterId(Principal);
-
-impl From<CanisterId> for Principal {
-    fn from(id: CanisterId) -> Self {
-        id.0
-    }
-}
-
-impl From<Principal> for CanisterId {
-    fn from(id: Principal) -> Self {
-        Self(id)
-    }
-}
-
-impl CanisterId {
-    /// Create a canister id from a u64, borrowed from ic source code with minor modification.
-    pub const fn from_u64(val: u64) -> Self {
-        // It is important to use big endian here to ensure that the generated
-        // `PrincipalId`s still maintain ordering.
-        let mut data = [0_u8; 29];
-
-        // Specify explicitly the length, so as to assert at compile time that a u64
-        // takes exactly 8 bytes
-        let val: [u8; 8] = val.to_be_bytes();
-
-        // for-loops in const fn are not supported
-        data[0] = val[0];
-        data[1] = val[1];
-        data[2] = val[2];
-        data[3] = val[3];
-        data[4] = val[4];
-        data[5] = val[5];
-        data[6] = val[6];
-        data[7] = val[7];
-
-        // Even though not defined in the interface spec, add another 0x1 to the array
-        // to create a sub category that could be used in future.
-        data[8] = 0x01;
-        data[9] = 0x01;
-
-        let len : u8 = 8 /* the u64 */ + 2 /* the last 0x01 */;
-
-        struct PrincipalLayout {
-            _len: u8,
-            _bytes: [u8; 29],
-        }
-
-        let id = PrincipalLayout {
-            _len: len,
-            _bytes: data,
-        };
-        let principal = unsafe { *((&id as *const PrincipalLayout) as *const Principal) };
-
-        Self(principal)
     }
 }
 

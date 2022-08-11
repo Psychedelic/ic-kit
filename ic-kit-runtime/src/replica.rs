@@ -5,6 +5,7 @@ use ic_kit_sys::types::RejectionCode;
 use ic_types::Principal;
 use std::collections::HashMap;
 use std::future::Future;
+use std::panic::{RefUnwindSafe, UnwindSafe};
 use tokio::sync::{mpsc, oneshot};
 
 /// A local replica that contains one or several canisters.
@@ -31,7 +32,7 @@ enum ReplicaMessage {
     CanisterRequest {
         canister_id: Principal,
         message: Message,
-        reply_sender: oneshot::Sender<CallReply>,
+        reply_sender: Option<oneshot::Sender<CallReply>>,
     },
     CanisterReply {
         canister_id: Principal,
@@ -85,7 +86,7 @@ impl Replica {
                         .send(ReplicaMessage::CanisterRequest {
                             canister_id: call.callee,
                             message: call.into(),
-                            reply_sender: tx,
+                            reply_sender: Some(tx),
                         })
                         .unwrap_or_else(|_| {
                             panic!("ic-kit-runtime: could not send message to replica")
@@ -121,12 +122,20 @@ impl Replica {
         }
     }
 
+    /// Return the handle to a canister.
+    pub fn get_canister(&self, canister_id: Principal) -> CanisterHandle {
+        CanisterHandle {
+            replica: &self,
+            canister_id,
+        }
+    }
+
     /// Enqueue the given request to the destination canister.
-    pub fn enqueue_request(
+    pub(crate) fn enqueue_request(
         &self,
         canister_id: Principal,
         message: Message,
-        reply_sender: oneshot::Sender<CallReply>,
+        reply_sender: Option<oneshot::Sender<CallReply>>,
     ) {
         self.sender
             .send(ReplicaMessage::CanisterRequest {
@@ -143,7 +152,7 @@ impl Replica {
         let canister_id = call.callee;
         let message = Message::from(call);
         let (tx, rx) = oneshot::channel();
-        self.enqueue_request(canister_id, message, tx);
+        self.enqueue_request(canister_id, message, Some(tx));
         async {
             rx.await
                 .expect("ic-kit-runtime: Could not retrieve the response from the call.")
@@ -189,7 +198,7 @@ impl Default for Replica {
                         if let Some(chan) = canisters.get(&canister_id) {
                             chan.send(CanisterMessage {
                                 message,
-                                reply_sender: Some(reply_sender),
+                                reply_sender,
                             })
                             .unwrap_or_else(|_| {
                                 panic!("ic-kit-runtime: Could not enqueue the request.")
@@ -202,6 +211,7 @@ impl Default for Replica {
                             };
 
                             reply_sender
+                                .unwrap()
                                 .send(CallReply::Reject {
                                     rejection_code: RejectionCode::DestinationInvalid,
                                     rejection_message: format!(
@@ -238,5 +248,66 @@ impl<'a> CanisterHandle<'a> {
     /// Create a new call builder to call this canister.
     pub fn new_call<S: Into<String>>(&self, method_name: S) -> CallBuilder {
         CallBuilder::new(self.replica, self.canister_id, method_name.into())
+    }
+
+    /// Run the given custom function in the execution thread of the canister.
+    pub async fn custom<F: FnOnce() + Send + RefUnwindSafe + UnwindSafe + 'static>(
+        &self,
+        f: F,
+        env: Env,
+    ) -> CallReply {
+        let (tx, rx) = oneshot::channel();
+
+        self.replica.enqueue_request(
+            self.canister_id,
+            Message::CustomTask {
+                request_id: RequestId::new(),
+                task: Box::new(f),
+                env,
+            },
+            Some(tx),
+        );
+
+        rx.await.unwrap()
+    }
+
+    /// Run the given raw message in the canister's execution thread.
+    pub async fn run_env(&self, env: Env) -> CallReply {
+        let (tx, rx) = oneshot::channel();
+
+        self.replica.enqueue_request(
+            self.canister_id,
+            Message::Request {
+                request_id: RequestId::new(),
+                env,
+            },
+            Some(tx),
+        );
+
+        rx.await.unwrap()
+    }
+
+    /// Runs the init hook of the canister. For more customization use [`CanisterHandle::run_env`]
+    /// with [`Env::init()`].
+    pub async fn init(&self) -> CallReply {
+        self.run_env(Env::init()).await
+    }
+
+    /// Runs the pre_upgrade hook of the canister. For more customization use
+    /// [`CanisterHandle::run_env`] with [`Env::pre_upgrade()`].
+    pub async fn pre_upgrade(&self) -> CallReply {
+        self.run_env(Env::pre_upgrade()).await
+    }
+
+    /// Runs the post_upgrade hook of the canister. For more customization use
+    /// [`CanisterHandle::run_env`] with [`Env::post_upgrade()`].
+    pub async fn post_upgrade(&self) -> CallReply {
+        self.run_env(Env::post_upgrade()).await
+    }
+
+    /// Runs the post_upgrade hook of the canister. For more customization use
+    /// [`CanisterHandle::run_env`] with [`Env::heartbeat()`].
+    pub async fn heartbeat(&self) -> CallReply {
+        self.run_env(Env::heartbeat()).await
     }
 }

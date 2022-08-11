@@ -21,7 +21,6 @@ cfg_if::cfg_if! {
         pub mod prelude {
             pub use crate::canister::Canister;
             pub use crate::replica::Replica;
-            pub use crate::types::CanisterId;
             pub use crate::users;
             pub use canister_builder;
         }

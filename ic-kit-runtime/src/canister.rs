@@ -8,7 +8,7 @@ use ic_kit_sys::types::RejectionCode;
 use ic_types::Principal;
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
-use std::panic::{catch_unwind, RefUnwindSafe};
+use std::panic::catch_unwind;
 use std::thread::JoinHandle;
 use thread_local_panic_hook::set_hook;
 use tokio::select;
@@ -17,14 +17,10 @@ use tokio::sync::oneshot;
 
 const MAX_CYCLES_PER_RESPONSE: u128 = 12;
 
-const DEFAULT_PROVISIONAL_CYCLES_BALANCE: u128 = 100_000_000_000_000;
-
 /// A canister that is being executed.
 pub struct Canister {
     /// The id of the canister.
     canister_id: Principal,
-    /// The canister balance.
-    balance: u128,
     /// Maps the name of each of exported methods to the task function.
     symbol_table: HashMap<String, fn()>,
     /// The data reply that is being built for the current message. An interesting thing about the
@@ -62,7 +58,7 @@ pub struct Canister {
     /// The thread in which the canister is being executed at.
     _execution_thread_handle: JoinHandle<()>,
     /// The communication channel to send tasks to the execution thread.
-    task_tx: Sender<Box<dyn Fn() + Send + RefUnwindSafe>>,
+    task_tx: Sender<TaskFn>,
     /// Emits when the task we just sent has returned.
     task_completion_rx: Receiver<Completion>,
     /// To send the response to the calls.
@@ -120,7 +116,7 @@ impl Canister {
     pub fn new<T: Into<Principal>>(canister_id: T) -> Self {
         let (request_tx, request_rx) = mpsc::channel(8);
         let (reply_tx, reply_rx) = mpsc::channel(8);
-        let (task_tx, mut task_rx) = mpsc::channel::<Box<dyn Fn() + Send + RefUnwindSafe>>(8);
+        let (task_tx, mut task_rx) = mpsc::channel::<TaskFn>(8);
         let (task_completion_tx, task_completion_rx) = mpsc::channel(8);
 
         let execution_thread_handle = std::thread::spawn(move || {
@@ -156,7 +152,6 @@ impl Canister {
 
         Self {
             canister_id: canister_id.into(),
-            balance: DEFAULT_PROVISIONAL_CYCLES_BALANCE,
             symbol_table: HashMap::new(),
             msg_reply_data: Vec::new(),
             msg_reply_senders: HashMap::new(),
@@ -192,12 +187,6 @@ impl Canister {
         }
 
         self.symbol_table.insert(method_name, task_fn);
-        self
-    }
-
-    /// Set the canister's cycle balance to this number.
-    pub fn with_balance(mut self, balance: u128) -> Self {
-        self.balance = balance;
         self
     }
 
@@ -253,7 +242,7 @@ impl Canister {
                         let f = f.clone();
                         Box::new(move || {
                             f();
-                        }) as Box<dyn Fn() + Send + RefUnwindSafe>
+                        }) as TaskFn
                     });
 
                 (request_id, env, task)
@@ -290,7 +279,7 @@ impl Canister {
                         let fun = std::mem::transmute::<isize, fn(isize)>(fun);
                         fun(fun_env);
                     }
-                }) as Box<dyn Fn() + Send + RefUnwindSafe>;
+                }) as TaskFn;
 
                 (id, env, Some(task))
             }
@@ -320,7 +309,7 @@ impl Canister {
             .cycles_available_store
             .entry(request_id)
             .or_insert(self.env.cycles_available);
-        self.balance += self.env.cycles_refunded;
+        self.env.balance += self.env.cycles_refunded;
 
         if let Some(sender) = reply_sender {
             self.msg_reply_senders
@@ -383,7 +372,7 @@ impl Canister {
     }
 
     /// Execute the given task in the execution thread and return the completion status.
-    async fn perform(&mut self, task: Box<dyn Fn() + Send + RefUnwindSafe>) -> Completion {
+    async fn perform(&mut self, task: TaskFn) -> Completion {
         // make sure we clean the task_returned receiver. since we may have sent more than one
         // completion signal from previous task.
         while self.task_completion_rx.try_recv().is_ok() {}
@@ -445,13 +434,13 @@ impl Canister {
 
     fn discard_pending_call(&mut self) {
         if let Some(pending_call) = self.pending_call.take() {
-            self.balance += MAX_CYCLES_PER_RESPONSE + pending_call.3;
+            self.env.balance += MAX_CYCLES_PER_RESPONSE + pending_call.3;
         }
     }
 
     fn discard_call_queue(&mut self) {
         while let Some(pending_call) = self.call_queue.pop() {
-            self.balance += MAX_CYCLES_PER_RESPONSE + pending_call.3;
+            self.env.balance += MAX_CYCLES_PER_RESPONSE + pending_call.3;
         }
     }
 }
@@ -814,7 +803,7 @@ impl Ic0CallHandlerProxy for Canister {
     }
 
     fn canister_cycle_balance(&mut self) -> Result<i64, String> {
-        let balance = self.balance + self.cycles_accepted;
+        let balance = self.env.balance + self.cycles_accepted;
 
         if balance > (u64::MAX as u128) {
             return Err("refunded cycles does not fit in u64".to_string());
@@ -824,7 +813,7 @@ impl Ic0CallHandlerProxy for Canister {
     }
 
     fn canister_cycle_balance128(&mut self, dst: isize) -> Result<(), String> {
-        let balance = self.balance + self.cycles_accepted;
+        let balance = self.env.balance + self.cycles_accepted;
         let data = balance.to_le_bytes();
         copy_to_canister(dst, 0, 16, &data)?;
         Ok(())
@@ -911,11 +900,11 @@ impl Ic0CallHandlerProxy for Canister {
 
         self.discard_pending_call();
 
-        if self.balance < MAX_CYCLES_PER_RESPONSE {
+        if self.env.balance < MAX_CYCLES_PER_RESPONSE {
             return Err("Insufficient cycles balance to process canister response.".into());
         }
 
-        self.balance -= MAX_CYCLES_PER_RESPONSE;
+        self.env.balance -= MAX_CYCLES_PER_RESPONSE;
 
         let callee_bytes = copy_from_canister(callee_src, callee_size);
         let name_bytes = copy_from_canister(name_src, name_size);
@@ -976,11 +965,11 @@ impl Ic0CallHandlerProxy for Canister {
 
         let amount = amount as u128;
 
-        if self.balance < amount {
+        if self.env.balance < amount {
             return Err(format!("Insufficient cycles balance."));
         }
 
-        self.balance -= amount;
+        self.env.balance -= amount;
         self.pending_call.as_mut().unwrap().3 += amount;
 
         Ok(())
@@ -997,11 +986,11 @@ impl Ic0CallHandlerProxy for Canister {
         let low = amount_low as u128;
         let amount = high << 64 + low;
 
-        if self.balance < amount {
+        if self.env.balance < amount {
             return Err(format!("Insufficient cycles balance."));
         }
 
-        self.balance -= amount;
+        self.env.balance -= amount;
         self.pending_call.as_mut().unwrap().3 += amount;
 
         Ok(())
