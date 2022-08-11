@@ -19,7 +19,6 @@ pub use setup::setup_hooks;
 
 // The KitCanister derive macro.
 pub use canister::KitCanister;
-pub use ic_kit_macros::KitCanister;
 
 /// The IC-kit runtime, which can be used for testing the canister in non-wasm environments.
 #[cfg(not(target_family = "wasm"))]
