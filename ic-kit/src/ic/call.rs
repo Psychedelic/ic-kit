@@ -7,6 +7,7 @@ use candid::{decode_args, decode_one, encode_args, encode_one, CandidType, Princ
 use ic_kit_sys::ic0;
 use serde::de::DeserializeOwned;
 
+use ic_kit_sys::types::RejectionCode;
 pub use ic_kit_sys::types::{CallError, CANDID_EMPTY_ARG};
 
 /// A call builder that let's you create an inter-canister call which can be then sent to the
@@ -132,11 +133,11 @@ impl CallBuilder {
     ///
     /// This method traps if the amount determined in the `payment` is larger than the canister's
     /// balance at the time of invocation.
-    pub fn perform_one_way(self) {
+    pub fn perform_one_way(self) -> Result<(), RejectionCode> {
         let callee = self.canister_id.as_slice();
         let method = self.method_name.as_str();
 
-        unsafe {
+        let e_code = unsafe {
             ic0::call_new(
                 callee.as_ptr() as isize,
                 callee.len() as isize,
@@ -148,7 +149,13 @@ impl CallBuilder {
                 -1,
             );
 
-            self.ic0_internal_call_perform();
+            self.ic0_internal_call_perform()
+        };
+
+        if e_code != 0 {
+            Err(e_code.into())
+        } else {
+            Ok(())
         }
     }
 

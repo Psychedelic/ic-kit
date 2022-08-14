@@ -1,1 +1,1 @@
-service : { fib : (nat64) -> (nat64); fib_join : (nat64) -> (nat64) }
+service : { fib : (nat64) -> (nat64) }
