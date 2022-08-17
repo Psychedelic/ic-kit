@@ -1,4 +1,5 @@
 use super::{BlockAddress, BlockSize, MIN_ALLOCATION_SIZE};
+use crate::allocator::checksum::CheckedU40;
 use crate::memory::Memory;
 use crate::utils::write_struct;
 use std::collections::BTreeMap;
@@ -33,7 +34,7 @@ pub struct HoleList<M: Memory> {
 }
 
 // On heap memory allocators this usually is stored within the hole itself, but we're doing this
-// for a secondary storage.
+// for a secondary storage...
 #[derive(Debug)]
 struct Hole {
     size: BlockSize,
@@ -42,9 +43,17 @@ struct Hole {
     next: Option<NonNull<Hole>>,
 }
 
+// Instead this is what we store on the free blocks.
 #[repr(packed)]
-struct HoleHeader {
-    size: BlockSize,
+pub struct HoleHeader {
+    size: CheckedU40,
+    next: BlockAddress,
+}
+
+#[repr(packed)]
+pub struct HoleListRoots {
+    version: [u8; 5],
+    root: [BlockAddress; 36],
     next: BlockAddress,
 }
 
@@ -66,9 +75,10 @@ impl<M: Memory> HoleList<M> {
         Self::default()
     }
 
-    /// Find and return a block that can
+    /// Find and return a block that can fit the given size.
     pub fn find(&mut self, size: BlockSize) -> Option<(BlockAddress, BlockSize)> {
-        let size = size.max(MIN_ALLOCATION_SIZE);
+        // align by 4.
+        let size = (size.max(MIN_ALLOCATION_SIZE) + 3) & !3;
         let mut i = get_log2_index(size).max(self.roots_left_boundary);
 
         // Best case  = O(n)
@@ -93,20 +103,33 @@ impl<M: Memory> HoleList<M> {
         }
 
         // If the delta can form a valuable hole put it back to use.
-        if delta >= MIN_ALLOCATION_SIZE {
+        let (addr, size) = if delta >= MIN_ALLOCATION_SIZE {
             // We already know this hole does not have a neighbour so use `raw_insert` instead of
             // the `insert` method.
             self.raw_insert(addr + size, delta, false);
-            Some((addr, size))
+            (addr, size)
         } else {
             // we are using the extra bytes for this allocation hence +delta in size.
-            Some((addr, size + delta))
-        }
+            (addr, size + delta)
+        };
+
+        // write the block size metadata.
+        write_struct::<M, HoleHeader>(
+            addr,
+            &HoleHeader {
+                size: CheckedU40::new(size),
+                next: 0,
+            },
+        );
+
+        Some((addr, size))
     }
 
     /// Insert the given hole to this list without attempting to merge with neighbouring nodes. Only
     /// use this method when you are SURE the block does not have a neighbour, for example when
     /// attempting to form a HoleList from a serialization.
+    ///
+    /// Only skip write when recovering from stable storage.
     pub fn raw_insert(&mut self, addr: BlockAddress, size: BlockSize, skip_write: bool) {
         // Find out which linked list we have to insert this hole to based on its size.
         let index = get_log2_index(size);
@@ -114,24 +137,10 @@ impl<M: Memory> HoleList<M> {
         // Perform the linked list insertion.
         let maybe_next = self.roots[index].clone();
 
-        let hole = Hole {
-            size,
-            address: addr,
-            prev: None,
-            next: maybe_next,
-        };
-
+        // create the NonNull<Hole> and the header.
+        let hole = Hole::new(addr, size, maybe_next);
         let header = hole.to_header();
         let hole = NonNull::<Hole>::from(Box::leak(Box::new(hole)));
-
-        if !skip_write {
-            write_struct::<M, HoleHeader>(addr, &header);
-        }
-
-        #[cfg(test)]
-        ACTIVE_HOLE.with(|c| {
-            *c.borrow_mut() += 1;
-        });
 
         if let Some(mut next) = maybe_next {
             unsafe {
@@ -148,6 +157,11 @@ impl<M: Memory> HoleList<M> {
 
         if index < self.roots_left_boundary {
             self.roots_left_boundary = index;
+        }
+
+        // Flush the hole header to the stable storage.
+        if !skip_write {
+            write_struct::<M, HoleHeader>(addr, &header);
         }
     }
 
@@ -249,6 +263,20 @@ impl<M: Memory> HoleList<M> {
 }
 
 impl Hole {
+    pub fn new(addr: BlockAddress, size: BlockSize, next: Option<NonNull<Hole>>) -> Self {
+        #[cfg(test)]
+        ACTIVE_HOLE.with(|c| {
+            *c.borrow_mut() += 1;
+        });
+
+        Hole {
+            size,
+            address: addr,
+            prev: None,
+            next,
+        }
+    }
+
     /// Returns true if the hole is the index hole in a linked list.
     pub fn is_root(&self) -> bool {
         self.prev.is_none()
@@ -272,9 +300,10 @@ impl Hole {
     }
 
     /// Return a stable storage header for this hole.
+    #[inline]
     pub fn to_header(&self) -> HoleHeader {
         HoleHeader {
-            size: self.size,
+            size: CheckedU40::new(self.size),
             next: match self.next {
                 Some(x) => unsafe { x.as_ref().address },
                 None => 0,
@@ -487,7 +516,7 @@ mod tests {
             assert_eq!(holes(), 1);
             list.insert(100, 70);
             assert_eq!(holes(), 1);
-            assert_eq!(list.find(150), Some((0, 150)));
+            assert_eq!(list.find(150), Some((0, 152)));
             assert_eq!(holes(), 1);
         }
 
@@ -501,7 +530,7 @@ mod tests {
         let mut list = HoleList::<MockMemory>::new();
         list.insert(100, 70);
         list.insert(0, 100);
-        assert_eq!(list.find(150), Some((0, 150)));
+        assert_eq!(list.find(150), Some((0, 152)));
         assert_eq!(holes(), 1);
     }
 
@@ -514,7 +543,7 @@ mod tests {
         list.insert(100, 70);
         assert_eq!(list.find(150), None);
         list.insert(70, 30);
-        assert_eq!(list.find(150), Some((0, 150)));
+        assert_eq!(list.find(150), Some((0, 152)));
     }
 
     #[test]

@@ -8,4 +8,5 @@ pub type BlockSize = u64;
 pub const MIN_ALLOCATION_SIZE: BlockSize = 16;
 
 mod allocator;
+mod checksum;
 mod hole;
