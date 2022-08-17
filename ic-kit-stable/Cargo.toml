@@ -1,0 +1,12 @@
+[package]
+name = "ic-kit-stable"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ic-kit = {path="../ic-kit", version="0.5.0-alpha.0"}
+
+[features]
+experimental-stable64 = ["ic-kit/experimental-stable64"]

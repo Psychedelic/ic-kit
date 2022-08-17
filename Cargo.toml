@@ -5,6 +5,7 @@ members = [
     "examples/naming_system",
     "examples/fib",
     "ic-kit",
+    "ic-kit-stable",
     "ic-kit-sys",
     "ic-kit-macros",
     "ic-kit-runtime",
