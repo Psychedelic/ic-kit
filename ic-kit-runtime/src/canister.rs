@@ -1,4 +1,5 @@
 use crate::call::CallReply;
+use crate::stable::{HeapStableMemory, StableMemoryBackend};
 use crate::types::*;
 use futures::executor::block_on;
 use ic_kit_sys::ic0;
@@ -47,6 +48,8 @@ pub struct Canister {
     outgoing_calls: HashMap<OutgoingRequestId, RequestCallbacks>,
     /// The canister execution environment.
     env: Env,
+    /// The stable storage backend for this canister.
+    stable: Box<dyn StableMemoryBackend + Send>,
     /// The request id of the current incoming message.
     request_id: Option<IncomingRequestId>,
     /// The calls that are finalized and should be sent after this entry point's successful
@@ -161,6 +164,7 @@ impl Canister {
             pending_outgoing_requests: HashMap::new(),
             outgoing_calls: HashMap::new(),
             env: Env::default(),
+            stable: Box::new(HeapStableMemory::default()),
             request_id: None,
             call_queue: Vec::with_capacity(8),
             pending_call: None,
@@ -187,6 +191,12 @@ impl Canister {
         }
 
         self.symbol_table.insert(method_name, task_fn);
+        self
+    }
+
+    /// Provide the canister with this stable storage backend.
+    pub fn with_stable(mut self, stable: Box<dyn StableMemoryBackend + Send>) -> Self {
+        self.stable = stable;
         self
     }
 
@@ -1014,7 +1024,7 @@ impl Ic0CallHandlerProxy for Canister {
         todo!()
     }
 
-    fn stable_grow(&mut self, _new_pages: i32) -> Result<i32, String> {
+    fn stable_grow(&mut self, new_pages: i32) -> Result<i32, String> {
         todo!()
     }
 
@@ -1027,7 +1037,7 @@ impl Ic0CallHandlerProxy for Canister {
     }
 
     fn stable64_size(&mut self) -> Result<i64, String> {
-        todo!()
+        Ok(self.stable.stable_size() as i64)
     }
 
     fn stable64_grow(&mut self, _new_pages: i64) -> Result<i64, String> {
