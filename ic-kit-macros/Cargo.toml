@@ -1,14 +1,16 @@
 [package]
 name = "ic-kit-macros"
-version = "0.1.0-alpha.0"
+version = "0.1.0-alpha.1"
 edition = "2021"
-authors = ["Parsa Ghadimi <i@parsa.ooo>"]
+authors = ["Parsa Ghadimi <i@parsa.ooo>", "Ossian Mapes <oz@fleek.co>"]
 description = "IC-Kit's macros for canister development"
-license = "GPL-3.0"
+license = "MIT"
+readme = "README.md"
 repository = "https://github.com/Psychedelic/ic-kit"
 documentation = "https://docs.rs/ic-kit-macros"
-categories = ["api-bindings", "development-tools::testing"]
-keywords = ["internet-computer", "canister", "cdk", "fleek"]
+homepage = "https://sly.ooo"
+categories = ["api-bindings"]
+keywords = ["internet-computer", "canister", "fleek", "psycedelic"]
 include = ["src", "Cargo.toml", "README.md"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

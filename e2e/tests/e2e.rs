@@ -1,5 +1,4 @@
 use candid::utils::{decode_args, encode_args, ArgumentDecoder, ArgumentEncoder};
-use candid::Encode;
 use ic_kit_e2e_tests::cargo_build_canister;
 use ic_state_machine_tests::{CanisterId, ErrorCode, StateMachine, UserError, WasmResult};
 use serde_bytes::ByteBuf;

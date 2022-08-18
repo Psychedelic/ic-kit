@@ -1,5 +1,5 @@
 use crate::allocator::checksum::CheckedU40;
-use crate::allocator::hole::{HoleList, HoleListRoots};
+use crate::allocator::hole::HoleList;
 use crate::allocator::{BlockAddress, BlockSize};
 use crate::memory::Memory;
 use crate::utils::read_struct;
@@ -17,11 +17,9 @@ pub struct StableAllocator<M: Memory> {
 
 impl<M: Memory> StableAllocator<M> {
     pub fn new() -> Self {
-        let mut allocator = Self {
+        Self {
             hole_list: HoleList::new(),
-        };
-
-        allocator
+        }
     }
 
     /// Allocate a stable storage block with the given size.
@@ -34,8 +32,8 @@ impl<M: Memory> StableAllocator<M> {
             return Ok(addr + 8);
         }
 
-        /// number of pages we need to grow in order to fit this size. this is a ceiling division.
-        /// by 1 WebAssembly page.
+        // number of pages we need to grow in order to fit this size. this is a ceiling division.
+        // by 1 WebAssembly page.
         let new_pages = (size + (1 << 16) - 1) >> 16;
         let start = M::stable_grow(new_pages);
 

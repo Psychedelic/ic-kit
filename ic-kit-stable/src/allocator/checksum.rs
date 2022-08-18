@@ -21,7 +21,7 @@ impl CheckedU40 {
         let b = (value & 0x00ff000000) >> 24;
         let c = (value & 0x0000ff0000) >> 16;
         let d = (value & 0x000000ff00) >> 8;
-        let e = (value & 0x00000000ff);
+        let e = value & 0x00000000ff;
         let x = a ^ b ^ c;
         let y = c ^ d ^ e;
         let z = x ^ y;
@@ -40,14 +40,14 @@ impl CheckedU40 {
             return None;
         }
 
+        let x = (value & 0xff00000000000000) >> 56;
+        let y = (value & 0x00ff000000000000) >> 48;
+        let z = (value & 0x0000ff0000000000) >> 40;
         let a = (value & 0xff00000000) >> 32;
         let b = (value & 0x00ff000000) >> 24;
         let c = (value & 0x0000ff0000) >> 16;
         let d = (value & 0x000000ff00) >> 8;
-        let e = (value & 0x00000000ff);
-        let x = (value & 0xff00000000000000) >> 56;
-        let y = (value & 0x00ff000000000000) >> 48;
-        let z = (value & 0x0000ff0000000000) >> 40;
+        let e = value & 0x00000000ff;
 
         let xx = a ^ b ^ c;
         let yy = c ^ d ^ e;

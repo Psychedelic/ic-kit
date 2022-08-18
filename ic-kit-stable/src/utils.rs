@@ -1,8 +1,5 @@
 use crate::memory::Memory;
 
-/// Address to a place in stable memory.
-pub struct Address(pub(crate) u64);
-
 // Reads a struct from memory.
 pub fn read_struct<M: Memory, T>(addr: u64) -> T {
     let mut t: T = unsafe { core::mem::zeroed() };

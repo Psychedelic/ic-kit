@@ -1,22 +1,22 @@
 [package]
-name = "ic-kit-stable"
+name = "ic-kit-certified"
 version = "0.1.0-alpha.0"
-edition = "2021"
+edition = "2018"
+description = "Certified variable friendly data structures for the Internet Computer."
 authors = ["Parsa Ghadimi <i@parsa.ooo>", "Ossian Mapes <oz@fleek.co>"]
-description = "IC-Kit's data structures living on the stable storage."
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/Psychedelic/ic-kit"
-documentation = "https://docs.rs/ic-kit-stable"
+documentation = "https://docs.rs/ic-kit-certified"
 homepage = "https://sly.ooo"
 categories = ["data-structures"]
 keywords = ["internet-computer", "canister", "fleek", "psycedelic"]
 include = ["src", "Cargo.toml", "README.md"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
-ic-kit = {path="../ic-kit", version="0.5.0-alpha.1"}
-
-[features]
-experimental-stable64 = ["ic-kit/experimental-stable64"]
+candid = "0.7"
+sha2 = "0.10.2"
+serde = { version="1.0.116", features = ["derive"] }
+serde_bytes = "0.11.5"
+serde_cbor = "0.11.2"
+hex = "0.4.3"

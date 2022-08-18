@@ -10,3 +10,5 @@ pub const MIN_ALLOCATION_SIZE: BlockSize = 16;
 mod allocator;
 mod checksum;
 mod hole;
+
+pub use allocator::StableAllocator;
