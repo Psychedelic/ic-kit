@@ -10,7 +10,7 @@ repository = "https://github.com/Psychedelic/ic-kit"
 documentation = "https://docs.rs/ic-kit-certified"
 homepage = "https://sly.ooo"
 categories = ["data-structures"]
-keywords = ["internet-computer", "canister", "fleek", "psycedelic"]
+keywords = ["internet-computer", "canister", "fleek", "psychedelic"]
 include = ["src", "Cargo.toml", "README.md"]
 
 [dependencies]
