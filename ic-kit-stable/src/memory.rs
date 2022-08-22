@@ -1,4 +1,4 @@
-/// The memory interface.
+/// The memory interface. temp remove this once ic-kit-runtime has stable* support.
 pub trait Memory {
     fn stable_size() -> u64;
     fn stable_grow(new_pages: u64) -> i64;
@@ -37,3 +37,33 @@ pub mod mock {
         }
     }
 }
+
+/// A memory backend using the IC.
+pub struct IcMemory;
+
+impl Memory for IcMemory {
+    fn stable_size() -> u64 {
+        ic_kit::ic::stable_size() as u64
+    }
+
+    fn stable_grow(new_pages: u64) -> i64 {
+        match ic_kit::ic::stable_grow(new_pages as ic_kit::ic::StableSize) {
+            Ok(s) => s as i64,
+            Err(_) => -1,
+        }
+    }
+
+    fn stable_read(offset: u64, buf: &mut [u8]) {
+        ic_kit::ic::stable_read(offset as ic_kit::ic::StableSize, buf)
+    }
+
+    fn stable_write(offset: u64, buf: &[u8]) {
+        ic_kit::ic::stable_write(offset as ic_kit::ic::StableSize, buf)
+    }
+}
+
+#[cfg(test)]
+pub type DefaultMemory = mock::MockMemory;
+
+#[cfg(not(test))]
+pub type DefaultMemory = IcMemory;

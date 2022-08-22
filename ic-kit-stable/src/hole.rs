@@ -1,5 +1,5 @@
-use super::{BlockAddress, BlockSize, MIN_ALLOCATION_SIZE};
-use crate::allocator::checksum::CheckedU40;
+use crate::allocator::{BlockAddress, BlockSize, MIN_ALLOCATION_SIZE};
+use crate::checksum::CheckedU40;
 use crate::memory::Memory;
 use crate::utils::write_struct;
 use std::collections::BTreeMap;

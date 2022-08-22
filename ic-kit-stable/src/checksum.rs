@@ -9,7 +9,7 @@ impl CheckedU40 {
     ///
     /// If the provided value is larger than 40bits, or if it's zero.
     pub fn new(value: u64) -> Self {
-        if value > (1 << 40) {
+        if value & 0xffffff0000000000 > 0 {
             panic!("only 40bit integers are supported.");
         }
 
@@ -58,5 +58,61 @@ impl CheckedU40 {
         } else {
             None
         }
+    }
+
+    /// Return the protected number without any checks.
+    pub fn unchecked(&self) -> u64 {
+        self.0 & 0x000000ffffffffff
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::checksum::CheckedU40;
+
+    #[test]
+    fn test_verify() {
+        assert_eq!(CheckedU40::new(0x34653443ab).verify(), Some(0x34653443ab));
+        assert_eq!(CheckedU40(0x34653443ab).verify(), None);
+
+        for i in 0..1_000 {
+            let n = ((0x121212 * i) << 40) | (0x1010101010 * (i + 0x12345));
+            assert_eq!(CheckedU40(n).verify(), None);
+
+            let n = n & 0x000000ffffffffff;
+            assert_eq!(CheckedU40::new(n).verify(), Some(n));
+        }
+
+        assert_eq!(
+            CheckedU40::new(0x000000ffffffffff).verify(),
+            Some(0x000000ffffffffff)
+        );
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_zero() {
+        CheckedU40::new(0);
+    }
+
+    #[test]
+    fn test_unchecked() {
+        for i in 0..1_000 {
+            let n = ((0x121212 * i) << 40) | (0x1010101010 * (i + 0x12345));
+            let n = n & 0x000000ffffffffff;
+            assert_eq!(CheckedU40::new(n).unchecked(), n);
+        }
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_non_40bit() {
+        CheckedU40::new(0x000000ffffffffff + 1);
+    }
+
+    #[test]
+    fn test_invalid() {
+        assert_eq!(CheckedU40(0xffffffffffffffff).verify(), None);
+        assert_eq!(CheckedU40(0).verify(), None);
     }
 }

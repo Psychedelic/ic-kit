@@ -1,9 +1,20 @@
-use crate::allocator::checksum::CheckedU40;
-use crate::allocator::hole::HoleList;
-use crate::allocator::{BlockAddress, BlockSize};
-use crate::memory::Memory;
+use crate::checksum::CheckedU40;
+use crate::hole::HoleList;
+use crate::memory::{DefaultMemory, IcMemory, Memory};
 use crate::utils::read_struct;
 use ic_kit::stable::StableMemoryError;
+
+/// An address to a block.
+pub type BlockAddress = u64;
+
+/// Size of a block.
+pub type BlockSize = u64;
+
+/// The internal minimum allocation size (includes size header)
+/// size : u64 = 8 bytes
+/// next : u64 = 8 bytes
+/// If the node is used then next is overwritten by content.
+pub const MIN_ALLOCATION_SIZE: BlockSize = 16;
 
 // TODO(qti3e) next steps:
 // write the HoleList root to stable storage at the first block.
@@ -11,7 +22,7 @@ use ic_kit::stable::StableMemoryError;
 
 /// An allocator over the stable storage. This allocator assumes that it owns the entire stable
 /// storage if there are already data in the stable storage.
-pub struct StableAllocator<M: Memory> {
+pub struct StableAllocator<M: Memory = DefaultMemory> {
     hole_list: HoleList<M>,
 }
 
@@ -76,12 +87,11 @@ impl<M: Memory> StableAllocator<M> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::memory::mock::MockMemory;
 
     #[test]
     #[should_panic]
     fn free_misuse() {
-        let mut allocator = StableAllocator::<MockMemory>::new();
+        let mut allocator = StableAllocator::<DefaultMemory>::new();
         assert_eq!(allocator.allocate(100), Ok(8));
         assert_eq!(allocator.allocate(100), Ok(116));
         allocator.free(100);
@@ -89,7 +99,7 @@ mod tests {
 
     #[test]
     fn allocate_after_free() {
-        let mut allocator = StableAllocator::<MockMemory>::new();
+        let mut allocator = StableAllocator::<DefaultMemory>::new();
         assert_eq!(allocator.allocate(100), Ok(8));
         assert_eq!(allocator.allocate(100), Ok(116));
         allocator.free(8);
