@@ -6,6 +6,7 @@ use crate::free;
 use crate::memory::DefaultMemory;
 use crate::utils::read_struct;
 use crate::Memory;
+use std::collections::hash_map;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::marker::PhantomData;
 use std::ptr;
@@ -94,12 +95,39 @@ impl<M: Memory> LruCache<M> {
         block_ptr
     }
 
+    /// Return the data at the given address.
+    pub fn get(&mut self, address: BlockAddress) -> *mut u8 {
+        unsafe {
+            self.load_internal(address)
+                .as_ref()
+                .unwrap()
+                .data()
+                .as_ptr() as *mut u8
+        }
+    }
+
     /// Mark the block at the given address as modified so we know to flush it to the stable storage.
     pub fn mark_modified(&mut self, address: BlockAddress) {
-        if let Some(entry) = self.map.get(&address) {
+        if let Some(&entry) = self.map.get(&address) {
             if self.modified.insert(address) {
-                self.modified_size += entry.size();
+                self.modified_size += unsafe { entry.as_ref().unwrap().size() };
                 self.maybe_flush();
+            }
+        }
+    }
+
+    /// Increment the reference count for a block, so we don't accidentally drop it.
+    pub fn pin(&mut self, address: BlockAddress) {
+        *self.ref_count.entry(address).or_default() += 1;
+    }
+
+    /// Decrement the reference count of a block address, so we can free it.
+    pub fn unpin(&mut self, address: BlockAddress) {
+        if let hash_map::Entry::Occupied(mut o) = self.ref_count.entry(address) {
+            if *o.get() == 0 {
+                o.remove();
+            } else {
+                *o.get_mut() -= 1;
             }
         }
     }

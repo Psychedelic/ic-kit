@@ -39,58 +39,119 @@ where
 
     /// Returns an immutable reference to the data.
     pub fn as_ref(&self) -> Option<StableRef<T>> {
-        with_lru(|lru| {});
+        if self.is_null() {
+            None
+        } else {
+            let data = with_lru(|lru| {
+                lru.pin(self.0);
+                lru.get(self.0)
+            });
 
-        todo!()
+            Some(StableRef {
+                data: unsafe { data as *mut T },
+                ptr: &self,
+            })
+        }
     }
 
     /// Returns a mutable reference to the data.
     pub fn as_ref_mut(&self) -> Option<StableRefMut<T>> {
-        todo!()
+        if self.is_null() {
+            None
+        } else {
+            let data = with_lru(|lru| {
+                lru.pin(self.0);
+                let data = lru.get(self.0);
+                lru.mark_modified(self.0);
+                data
+            });
+
+            Some(StableRefMut {
+                data: unsafe { data as *mut T },
+                ptr: &self,
+            })
+        }
     }
 }
 
-/// An immutable reference to
+/// An immutable reference to the data at the given block.
 pub struct StableRef<'b, T> {
     data: *mut T,
     ptr: &'b StablePtr<T>,
 }
 
+/// A mutable reference to the data at the given block.
 pub struct StableRefMut<'b, T> {
     data: *mut T,
     ptr: &'b StablePtr<T>,
 }
 
-impl<T> Deref for StableRef<T> {
+impl<T> Deref for StableRef<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        todo!()
+        unsafe { self.data.as_ref().unwrap() }
     }
 }
 
-impl<T> Deref for StableRefMut<T> {
+impl<T> Deref for StableRefMut<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
-        todo!()
+        unsafe { self.data.as_ref().unwrap() }
     }
 }
 
-impl<T> DerefMut for StableRefMut<T> {
+impl<T> DerefMut for StableRefMut<'_, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
-        todo!()
+        unsafe { self.data.as_mut().unwrap() }
     }
 }
 
-impl<T> Drop for StableRef<T> {
+impl<T> Drop for StableRef<'_, T> {
     fn drop(&mut self) {
-        todo!()
+        with_lru(|lru| {
+            lru.unpin(self.ptr.0);
+        });
     }
 }
 
-impl<T> Drop for StableRefMut<T> {
+impl<T> Drop for StableRefMut<'_, T> {
     fn drop(&mut self) {
-        todo!()
+        with_lru(|lru| {
+            lru.unpin(self.ptr.0);
+        });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::allocator::BlockSize;
+    use crate::pointer::StablePtr;
+    use crate::utils::write_struct;
+    use crate::{allocate, set_global_allocator, DefaultMemory, StableAllocator};
+
+    #[derive(Copy, Clone)]
+    struct Counter {
+        count: u128,
+    }
+
+    #[test]
+    fn x() {
+        let counter = Counter {
+            count: 0xaabbccddeeff,
+        };
+
+        set_global_allocator(StableAllocator::new());
+        let addr = allocate(std::mem::size_of::<Counter>() as BlockSize).unwrap();
+        write_struct::<DefaultMemory, Counter>(addr, &counter);
+        let ptr = StablePtr::<Counter>::from_address(addr);
+
+        let counter_ref = ptr.as_ref().unwrap();
+        println!("Count = 0x{:x}", counter_ref.count);
+
+        let mut mut_ref = ptr.as_ref_mut().unwrap();
+        mut_ref.count += 1;
+        println!("Count = 0x{:x}", mut_ref.count);
     }
 }
