@@ -38,7 +38,7 @@ where
     }
 
     /// Returns an immutable reference to the data.
-    pub fn as_ref(&self) -> Option<StableRef<T>> {
+    pub unsafe fn as_ref(&self) -> Option<StableRef<T>> {
         if self.is_null() {
             None
         } else {
@@ -54,8 +54,8 @@ where
         }
     }
 
-    /// Returns a mutable reference to the data.
-    pub fn as_ref_mut(&self) -> Option<StableRefMut<T>> {
+    /// Returns a mutable reference to the data. Calling this method marks the block as modified.
+    pub unsafe fn as_mut(&self) -> Option<StableRefMut<T>> {
         if self.is_null() {
             None
         } else {
@@ -137,21 +137,27 @@ mod tests {
     }
 
     #[test]
-    fn x() {
+    fn test_ref() {
         let counter = Counter {
             count: 0xaabbccddeeff,
         };
 
+        // Setup the env.
         set_global_allocator(StableAllocator::new());
+
+        // Allocate storage and write the initial version of counter to the stable storage.
         let addr = allocate(std::mem::size_of::<Counter>() as BlockSize).unwrap();
         write_struct::<DefaultMemory, Counter>(addr, &counter);
+
+        // Create a pointer from the address.
         let ptr = StablePtr::<Counter>::from_address(addr);
 
-        let counter_ref = ptr.as_ref().unwrap();
+        let counter_ref = unsafe { ptr.as_ref().unwrap() };
         println!("Count = 0x{:x}", counter_ref.count);
 
-        let mut mut_ref = ptr.as_ref_mut().unwrap();
+        let mut mut_ref = unsafe { ptr.as_mut().unwrap() };
         mut_ref.count += 1;
+
         println!("Count = 0x{:x}", mut_ref.count);
     }
 }
