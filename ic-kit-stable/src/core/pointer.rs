@@ -1,25 +1,37 @@
-use crate::allocator::{BlockAddress, BlockSize};
-use crate::lru::{BlockEntry, LruCache};
-use crate::{allocate, with_lru};
+use crate::core::allocator::{BlockAddress, BlockSize};
+use crate::core::copy::StableCopy;
+use crate::core::global::{allocate, with_lru};
+use crate::core::memory::DefaultMemory;
+use crate::core::utils::write_struct;
 use ic_kit::stable::StableMemoryError;
 use std::marker::PhantomData;
+use std::mem::ManuallyDrop;
 use std::ops::{Deref, DerefMut};
 
 /// A smart pointer for data that lives on the stable storage, this uses the LRU layer to GC the
 /// data from heap and prevent multiple reads of the same block by keeping the most recently used
 /// addresses in the heap.
-#[derive(Copy, Clone)]
 #[repr(packed)]
 pub struct StablePtr<T>(BlockAddress, PhantomData<T>);
 
+impl<T> Clone for StablePtr<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T> Copy for StablePtr<T> {}
+
 impl<T> StablePtr<T>
 where
-    T: Copy,
+    T: StableCopy,
 {
     /// Allocate space for the given data on the stable storage and return a stable pointer.
     pub fn new(data: T) -> Result<Self, StableMemoryError> {
+        let data = ManuallyDrop::new(data);
         let addr = allocate(std::mem::size_of::<T>() as BlockSize)?;
-        todo!()
+        write_struct::<DefaultMemory, T>(addr, &data);
+        Ok(Self::from_address(addr))
     }
 
     /// Create a new pointer at the given address.
@@ -126,15 +138,16 @@ impl<T> Drop for StableRefMut<'_, T> {
 
 #[cfg(test)]
 mod tests {
-    use crate::allocator::BlockSize;
-    use crate::pointer::StablePtr;
-    use crate::utils::write_struct;
-    use crate::{allocate, set_global_allocator, DefaultMemory, StableAllocator};
+    use crate::core::allocator::StableAllocator;
+    use crate::core::copy::StableCopy;
+    use crate::core::global::{set_global_allocator, with_lru};
+    use crate::core::pointer::StablePtr;
 
-    #[derive(Copy, Clone)]
     struct Counter {
         count: u128,
     }
+
+    impl StableCopy for Counter {}
 
     #[test]
     fn test_ref() {
@@ -145,19 +158,22 @@ mod tests {
         // Setup the env.
         set_global_allocator(StableAllocator::new());
 
-        // Allocate storage and write the initial version of counter to the stable storage.
-        let addr = allocate(std::mem::size_of::<Counter>() as BlockSize).unwrap();
-        write_struct::<DefaultMemory, Counter>(addr, &counter);
-
         // Create a pointer from the address.
-        let ptr = StablePtr::<Counter>::from_address(addr);
+        let ptr = StablePtr::new(counter).unwrap();
 
+        {
+            let counter_ref = unsafe { ptr.as_ref().unwrap() };
+            assert_eq!(counter_ref.count, 0xaabbccddeeff);
+
+            let mut mut_ref = unsafe { ptr.as_mut().unwrap() };
+            mut_ref.count = 0x1234;
+            assert_eq!(counter_ref.count, 0x1234);
+        }
+
+        with_lru(|lru| lru.clear());
+
+        // Trying to use the ptr should still have the data.
         let counter_ref = unsafe { ptr.as_ref().unwrap() };
-        println!("Count = 0x{:x}", counter_ref.count);
-
-        let mut mut_ref = unsafe { ptr.as_mut().unwrap() };
-        mut_ref.count += 1;
-
-        println!("Count = 0x{:x}", mut_ref.count);
+        assert_eq!(counter_ref.count, 0x1234);
     }
 }

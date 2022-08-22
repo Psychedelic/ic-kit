@@ -8,7 +8,7 @@ pub trait Memory {
 
 #[cfg(not(target_family = "wasm"))]
 pub mod mock {
-    use crate::memory::Memory;
+    use super::Memory;
     use ic_kit::rt::stable::{HeapStableMemory, StableMemoryBackend};
     use std::cell::RefCell;
 

@@ -68,7 +68,7 @@ impl CheckedU40 {
 
 #[cfg(test)]
 mod tests {
-    use crate::checksum::CheckedU40;
+    use super::*;
 
     #[test]
     fn test_verify() {

@@ -1,4 +1,4 @@
-use crate::memory::Memory;
+use crate::core::memory::Memory;
 
 // Reads a struct from memory.
 pub fn read_struct<M: Memory, T>(addr: u64) -> T {

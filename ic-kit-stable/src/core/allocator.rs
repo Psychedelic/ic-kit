@@ -1,7 +1,7 @@
-use crate::checksum::CheckedU40;
-use crate::hole::HoleList;
-use crate::memory::{DefaultMemory, IcMemory, Memory};
-use crate::utils::read_struct;
+use crate::core::checksum::CheckedU40;
+use crate::core::hole::HoleList;
+use crate::core::memory::{DefaultMemory, IcMemory, Memory};
+use crate::core::utils::read_struct;
 use ic_kit::stable::StableMemoryError;
 
 /// An address to a block.

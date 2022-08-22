@@ -1,7 +1,7 @@
-use crate::allocator::{BlockAddress, BlockSize, MIN_ALLOCATION_SIZE};
-use crate::checksum::CheckedU40;
-use crate::memory::Memory;
-use crate::utils::write_struct;
+use crate::core::allocator::{BlockAddress, BlockSize, MIN_ALLOCATION_SIZE};
+use crate::core::checksum::CheckedU40;
+use crate::core::memory::Memory;
+use crate::core::utils::write_struct;
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
 use std::ptr::NonNull;
@@ -432,7 +432,7 @@ fn get_log2_index(size: BlockSize) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::memory::mock::MockMemory;
+    use crate::core::memory::mock::MockMemory;
 
     /// return the number of active holes in the current thread.
     fn holes() -> usize {
