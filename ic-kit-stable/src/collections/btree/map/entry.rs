@@ -68,42 +68,10 @@ pub struct OccupiedEntry<'a, K: 'a, V: 'a> {
 #[stable(feature = "debug_btree_map", since = "1.12.0")]
 impl<K: Debug + Ord, V: Debug> Debug for OccupiedEntry<'_, K, V> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("OccupiedEntry").field("key", self.key()).field("value", self.get()).finish()
-    }
-}
-
-/// The error returned by [`try_insert`](BTreeMap::try_insert) when the key already exists.
-///
-/// Contains the occupied entry, and the value that was not inserted.
-#[unstable(feature = "map_try_insert", issue = "82766")]
-pub struct OccupiedError<'a, K: 'a, V: 'a> {
-    /// The entry in the map that was already occupied.
-    pub entry: OccupiedEntry<'a, K, V>,
-    /// The value which was not inserted, because the entry was already occupied.
-    pub value: V,
-}
-
-#[unstable(feature = "map_try_insert", issue = "82766")]
-impl<K: Debug + Ord, V: Debug> Debug for OccupiedError<'_, K, V> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("OccupiedError")
-            .field("key", self.entry.key())
-            .field("old_value", self.entry.get())
-            .field("new_value", &self.value)
+        f.debug_struct("OccupiedEntry")
+            .field("key", self.key())
+            .field("value", self.get())
             .finish()
-    }
-}
-
-#[unstable(feature = "map_try_insert", issue = "82766")]
-impl<'a, K: Debug + Ord, V: Debug> fmt::Display for OccupiedError<'a, K, V> {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "failed to insert {:?}, key {:?} already exists with value {:?}",
-            self.value,
-            self.entry.key(),
-            self.entry.get(),
-        )
     }
 }
 
@@ -324,7 +292,8 @@ impl<'a, K: Ord, V> VacantEntry<'a, K, V> {
                 // SAFETY: We have consumed self.handle and the reference returned.
                 let map = unsafe { self.dormant_map.awaken() };
                 let root = map.root.as_mut().unwrap();
-                root.push_internal_level().push(ins.kv.0, ins.kv.1, ins.right);
+                root.push_internal_level()
+                    .push(ins.kv.0, ins.kv.1, ins.right);
                 map.length += 1;
                 val_ptr
             }
@@ -503,7 +472,9 @@ impl<'a, K: Ord, V> OccupiedEntry<'a, K, V> {
     // Body of `remove_entry`, probably separate because the name reflects the returned pair.
     pub(super) fn remove_kv(self) -> (K, V) {
         let mut emptied_internal_root = false;
-        let (old_kv, _) = self.handle.remove_kv_tracking(|| emptied_internal_root = true);
+        let (old_kv, _) = self
+            .handle
+            .remove_kv_tracking(|| emptied_internal_root = true);
         // SAFETY: we consumed the intermediate root borrow, `self.handle`.
         let map = unsafe { self.dormant_map.awaken() };
         map.length -= 1;

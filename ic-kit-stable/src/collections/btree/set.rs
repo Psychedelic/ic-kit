@@ -81,7 +81,9 @@ pub struct BTreeSet<T> {
 #[stable(feature = "rust1", since = "1.0.0")]
 impl<T: Clone> Clone for BTreeSet<T> {
     fn clone(&self) -> Self {
-        BTreeSet { map: self.map.clone() }
+        BTreeSet {
+            map: self.map.clone(),
+        }
     }
 
     fn clone_from(&mut self, other: &Self) {
@@ -260,10 +262,11 @@ impl<T> BTreeSet<T> {
     /// let mut set: BTreeSet<i32> = BTreeSet::new();
     /// ```
     #[stable(feature = "rust1", since = "1.0.0")]
-    #[rustc_const_unstable(feature = "const_btree_new", issue = "71835")]
     #[must_use]
     pub const fn new() -> BTreeSet<T> {
-        BTreeSet { map: BTreeMap::new() }
+        BTreeSet {
+            map: BTreeMap::new(),
+        }
     }
 
     /// Constructs a double-ended iterator over a sub-range of elements in the set.
@@ -295,7 +298,9 @@ impl<T> BTreeSet<T> {
         T: Borrow<K> + Ord,
         R: RangeBounds<K>,
     {
-        Range { iter: self.map.range(range) }
+        Range {
+            iter: self.map.range(range),
+        }
     }
 
     /// Visits the elements representing the difference,
@@ -327,13 +332,17 @@ impl<T> BTreeSet<T> {
             if let (Some(self_min), Some(self_max)) = (self.first(), self.last()) {
                 (self_min, self_max)
             } else {
-                return Difference { inner: DifferenceInner::Iterate(self.iter()) };
+                return Difference {
+                    inner: DifferenceInner::Iterate(self.iter()),
+                };
             };
         let (other_min, other_max) =
             if let (Some(other_min), Some(other_max)) = (other.first(), other.last()) {
                 (other_min, other_max)
             } else {
-                return Difference { inner: DifferenceInner::Iterate(self.iter()) };
+                return Difference {
+                    inner: DifferenceInner::Iterate(self.iter()),
+                };
             };
         Difference {
             inner: match (self_min.cmp(other_max), self_max.cmp(other_min)) {
@@ -349,7 +358,10 @@ impl<T> BTreeSet<T> {
                     DifferenceInner::Iterate(self_iter)
                 }
                 _ if self.len() <= other.len() / ITER_PERFORMANCE_TIPPING_SIZE_DIFF => {
-                    DifferenceInner::Search { self_iter: self.iter(), other_set: other }
+                    DifferenceInner::Search {
+                        self_iter: self.iter(),
+                        other_set: other,
+                    }
                 }
                 _ => DifferenceInner::Stitch {
                     self_iter: self.iter(),
@@ -416,13 +428,17 @@ impl<T> BTreeSet<T> {
             if let (Some(self_min), Some(self_max)) = (self.first(), self.last()) {
                 (self_min, self_max)
             } else {
-                return Intersection { inner: IntersectionInner::Answer(None) };
+                return Intersection {
+                    inner: IntersectionInner::Answer(None),
+                };
             };
         let (other_min, other_max) =
             if let (Some(other_min), Some(other_max)) = (other.first(), other.last()) {
                 (other_min, other_max)
             } else {
-                return Intersection { inner: IntersectionInner::Answer(None) };
+                return Intersection {
+                    inner: IntersectionInner::Answer(None),
+                };
             };
         Intersection {
             inner: match (self_min.cmp(other_max), self_max.cmp(other_min)) {
@@ -430,12 +446,21 @@ impl<T> BTreeSet<T> {
                 (Equal, _) => IntersectionInner::Answer(Some(self_min)),
                 (_, Equal) => IntersectionInner::Answer(Some(self_max)),
                 _ if self.len() <= other.len() / ITER_PERFORMANCE_TIPPING_SIZE_DIFF => {
-                    IntersectionInner::Search { small_iter: self.iter(), large_set: other }
+                    IntersectionInner::Search {
+                        small_iter: self.iter(),
+                        large_set: other,
+                    }
                 }
                 _ if other.len() <= self.len() / ITER_PERFORMANCE_TIPPING_SIZE_DIFF => {
-                    IntersectionInner::Search { small_iter: other.iter(), large_set: self }
+                    IntersectionInner::Search {
+                        small_iter: other.iter(),
+                        large_set: self,
+                    }
                 }
-                _ => IntersectionInner::Stitch { a: self.iter(), b: other.iter() },
+                _ => IntersectionInner::Stitch {
+                    a: self.iter(),
+                    b: other.iter(),
+                },
             },
         }
     }
@@ -664,110 +689,6 @@ impl<T> BTreeSet<T> {
         other.is_subset(self)
     }
 
-    /// Returns a reference to the first element in the set, if any.
-    /// This element is always the minimum of all elements in the set.
-    ///
-    /// # Examples
-    ///
-    /// Basic usage:
-    ///
-    /// ```
-    /// #![feature(map_first_last)]
-    /// use std::collections::BTreeSet;
-    ///
-    /// let mut set = BTreeSet::new();
-    /// assert_eq!(set.first(), None);
-    /// set.insert(1);
-    /// assert_eq!(set.first(), Some(&1));
-    /// set.insert(2);
-    /// assert_eq!(set.first(), Some(&1));
-    /// ```
-    #[must_use]
-    #[unstable(feature = "map_first_last", issue = "62924")]
-    pub fn first(&self) -> Option<&T>
-    where
-        T: Ord,
-    {
-        self.map.first_key_value().map(|(k, _)| k)
-    }
-
-    /// Returns a reference to the last element in the set, if any.
-    /// This element is always the maximum of all elements in the set.
-    ///
-    /// # Examples
-    ///
-    /// Basic usage:
-    ///
-    /// ```
-    /// #![feature(map_first_last)]
-    /// use std::collections::BTreeSet;
-    ///
-    /// let mut set = BTreeSet::new();
-    /// assert_eq!(set.last(), None);
-    /// set.insert(1);
-    /// assert_eq!(set.last(), Some(&1));
-    /// set.insert(2);
-    /// assert_eq!(set.last(), Some(&2));
-    /// ```
-    #[must_use]
-    #[unstable(feature = "map_first_last", issue = "62924")]
-    pub fn last(&self) -> Option<&T>
-    where
-        T: Ord,
-    {
-        self.map.last_key_value().map(|(k, _)| k)
-    }
-
-    /// Removes the first element from the set and returns it, if any.
-    /// The first element is always the minimum element in the set.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// #![feature(map_first_last)]
-    /// use std::collections::BTreeSet;
-    ///
-    /// let mut set = BTreeSet::new();
-    ///
-    /// set.insert(1);
-    /// while let Some(n) = set.pop_first() {
-    ///     assert_eq!(n, 1);
-    /// }
-    /// assert!(set.is_empty());
-    /// ```
-    #[unstable(feature = "map_first_last", issue = "62924")]
-    pub fn pop_first(&mut self) -> Option<T>
-    where
-        T: Ord,
-    {
-        self.map.pop_first().map(|kv| kv.0)
-    }
-
-    /// Removes the last element from the set and returns it, if any.
-    /// The last element is always the maximum element in the set.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// #![feature(map_first_last)]
-    /// use std::collections::BTreeSet;
-    ///
-    /// let mut set = BTreeSet::new();
-    ///
-    /// set.insert(1);
-    /// while let Some(n) = set.pop_last() {
-    ///     assert_eq!(n, 1);
-    /// }
-    /// assert!(set.is_empty());
-    /// ```
-    #[unstable(feature = "map_first_last", issue = "62924")]
-    pub fn pop_last(&mut self) -> Option<T>
-    where
-        T: Ord,
-    {
-        self.map.pop_last().map(|kv| kv.0)
-    }
-
     /// Adds a value to the set.
     ///
     /// If the set did not have an equal element present, `true` is returned.
@@ -965,45 +886,9 @@ impl<T> BTreeSet<T> {
     where
         T: Borrow<Q> + Ord,
     {
-        BTreeSet { map: self.map.split_off(value) }
-    }
-
-    /// Creates an iterator that visits all elements in ascending order and
-    /// uses a closure to determine if an element should be removed.
-    ///
-    /// If the closure returns `true`, the element is removed from the set and
-    /// yielded. If the closure returns `false`, or panics, the element remains
-    /// in the set and will not be yielded.
-    ///
-    /// If the iterator is only partially consumed or not consumed at all, each
-    /// of the remaining elements is still subjected to the closure and removed
-    /// and dropped if it returns `true`.
-    ///
-    /// It is unspecified how many more elements will be subjected to the
-    /// closure if a panic occurs in the closure, or if a panic occurs while
-    /// dropping an element, or if the `DrainFilter` itself is leaked.
-    ///
-    /// # Examples
-    ///
-    /// Splitting a set into even and odd values, reusing the original set:
-    ///
-    /// ```
-    /// #![feature(btree_drain_filter)]
-    /// use std::collections::BTreeSet;
-    ///
-    /// let mut set: BTreeSet<i32> = (0..8).collect();
-    /// let evens: BTreeSet<_> = set.drain_filter(|v| v % 2 == 0).collect();
-    /// let odds = set;
-    /// assert_eq!(evens.into_iter().collect::<Vec<_>>(), vec![0, 2, 4, 6]);
-    /// assert_eq!(odds.into_iter().collect::<Vec<_>>(), vec![1, 3, 5, 7]);
-    /// ```
-    #[unstable(feature = "btree_drain_filter", issue = "70530")]
-    pub fn drain_filter<'a, F>(&'a mut self, pred: F) -> DrainFilter<'a, T, F>
-    where
-        T: Ord,
-        F: 'a + FnMut(&T) -> bool,
-    {
-        DrainFilter { pred, inner: self.map.drain_filter_inner() }
+        BTreeSet {
+            map: self.map.split_off(value),
+        }
     }
 
     /// Gets an iterator that visits the elements in the `BTreeSet` in ascending
@@ -1036,7 +921,9 @@ impl<T> BTreeSet<T> {
     /// ```
     #[stable(feature = "rust1", since = "1.0.0")]
     pub fn iter(&self) -> Iter<'_, T> {
-        Iter { iter: self.map.keys() }
+        Iter {
+            iter: self.map.keys(),
+        }
     }
 
     /// Returns the number of elements in the set.
@@ -1053,7 +940,6 @@ impl<T> BTreeSet<T> {
     /// ```
     #[must_use]
     #[stable(feature = "rust1", since = "1.0.0")]
-    #[rustc_const_unstable(feature = "const_btree_new", issue = "71835")]
     pub const fn len(&self) -> usize {
         self.map.len()
     }
@@ -1072,7 +958,6 @@ impl<T> BTreeSet<T> {
     /// ```
     #[must_use]
     #[stable(feature = "rust1", since = "1.0.0")]
-    #[rustc_const_unstable(feature = "const_btree_new", issue = "71835")]
     pub const fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -1137,7 +1022,9 @@ impl<T> IntoIterator for BTreeSet<T> {
     /// assert_eq!(v, [1, 2, 3, 4]);
     /// ```
     fn into_iter(self) -> IntoIter<T> {
-        IntoIter { iter: self.map.into_iter() }
+        IntoIter {
+            iter: self.map.into_iter(),
+        }
     }
 }
 
@@ -1150,59 +1037,6 @@ impl<'a, T> IntoIterator for &'a BTreeSet<T> {
         self.iter()
     }
 }
-
-/// An iterator produced by calling `drain_filter` on BTreeSet.
-#[unstable(feature = "btree_drain_filter", issue = "70530")]
-pub struct DrainFilter<'a, T, F>
-where
-    T: 'a,
-    F: 'a + FnMut(&T) -> bool,
-{
-    pred: F,
-    inner: super::map::DrainFilterInner<'a, T, ()>,
-}
-
-#[unstable(feature = "btree_drain_filter", issue = "70530")]
-impl<T, F> Drop for DrainFilter<'_, T, F>
-where
-    F: FnMut(&T) -> bool,
-{
-    fn drop(&mut self) {
-        self.for_each(drop);
-    }
-}
-
-#[unstable(feature = "btree_drain_filter", issue = "70530")]
-impl<T, F> fmt::Debug for DrainFilter<'_, T, F>
-where
-    T: fmt::Debug,
-    F: FnMut(&T) -> bool,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("DrainFilter").field(&self.inner.peek().map(|(k, _)| k)).finish()
-    }
-}
-
-#[unstable(feature = "btree_drain_filter", issue = "70530")]
-impl<'a, T, F> Iterator for DrainFilter<'_, T, F>
-where
-    F: 'a + FnMut(&T) -> bool,
-{
-    type Item = T;
-
-    fn next(&mut self) -> Option<T> {
-        let pred = &mut self.pred;
-        let mut mapped_pred = |k: &T, _v: &mut ()| pred(k);
-        self.inner.next(&mut mapped_pred).map(|(k, _)| k)
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.inner.size_hint()
-    }
-}
-
-#[unstable(feature = "btree_drain_filter", issue = "70530")]
-impl<T, F> FusedIterator for DrainFilter<'_, T, F> where F: FnMut(&T) -> bool {}
 
 #[stable(feature = "rust1", since = "1.0.0")]
 impl<T: Ord> Extend<T> for BTreeSet<T> {
@@ -1341,7 +1175,9 @@ impl<T: Debug> Debug for BTreeSet<T> {
 #[stable(feature = "rust1", since = "1.0.0")]
 impl<T> Clone for Iter<'_, T> {
     fn clone(&self) -> Self {
-        Iter { iter: self.iter.clone() }
+        Iter {
+            iter: self.iter.clone(),
+        }
     }
 }
 #[stable(feature = "rust1", since = "1.0.0")]
@@ -1415,7 +1251,9 @@ impl<T> FusedIterator for IntoIter<T> {}
 #[stable(feature = "btree_range", since = "1.17.0")]
 impl<T> Clone for Range<'_, T> {
     fn clone(&self) -> Self {
-        Range { iter: self.iter.clone() }
+        Range {
+            iter: self.iter.clone(),
+        }
     }
 }
 
@@ -1455,13 +1293,20 @@ impl<T> Clone for Difference<'_, T> {
     fn clone(&self) -> Self {
         Difference {
             inner: match &self.inner {
-                DifferenceInner::Stitch { self_iter, other_iter } => DifferenceInner::Stitch {
+                DifferenceInner::Stitch {
+                    self_iter,
+                    other_iter,
+                } => DifferenceInner::Stitch {
                     self_iter: self_iter.clone(),
                     other_iter: other_iter.clone(),
                 },
-                DifferenceInner::Search { self_iter, other_set } => {
-                    DifferenceInner::Search { self_iter: self_iter.clone(), other_set }
-                }
+                DifferenceInner::Search {
+                    self_iter,
+                    other_set,
+                } => DifferenceInner::Search {
+                    self_iter: self_iter.clone(),
+                    other_set,
+                },
                 DifferenceInner::Iterate(iter) => DifferenceInner::Iterate(iter.clone()),
             },
         }
@@ -1473,10 +1318,16 @@ impl<'a, T: Ord> Iterator for Difference<'a, T> {
 
     fn next(&mut self) -> Option<&'a T> {
         match &mut self.inner {
-            DifferenceInner::Stitch { self_iter, other_iter } => {
+            DifferenceInner::Stitch {
+                self_iter,
+                other_iter,
+            } => {
                 let mut self_next = self_iter.next()?;
                 loop {
-                    match other_iter.peek().map_or(Less, |other_next| self_next.cmp(other_next)) {
+                    match other_iter
+                        .peek()
+                        .map_or(Less, |other_next| self_next.cmp(other_next))
+                    {
                         Less => return Some(self_next),
                         Equal => {
                             self_next = self_iter.next()?;
@@ -1488,7 +1339,10 @@ impl<'a, T: Ord> Iterator for Difference<'a, T> {
                     }
                 }
             }
-            DifferenceInner::Search { self_iter, other_set } => loop {
+            DifferenceInner::Search {
+                self_iter,
+                other_set,
+            } => loop {
                 let self_next = self_iter.next()?;
                 if !other_set.contains(&self_next) {
                     return Some(self_next);
@@ -1500,10 +1354,14 @@ impl<'a, T: Ord> Iterator for Difference<'a, T> {
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         let (self_len, other_len) = match &self.inner {
-            DifferenceInner::Stitch { self_iter, other_iter } => {
-                (self_iter.len(), other_iter.len())
-            }
-            DifferenceInner::Search { self_iter, other_set } => (self_iter.len(), other_set.len()),
+            DifferenceInner::Stitch {
+                self_iter,
+                other_iter,
+            } => (self_iter.len(), other_iter.len()),
+            DifferenceInner::Search {
+                self_iter,
+                other_set,
+            } => (self_iter.len(), other_set.len()),
             DifferenceInner::Iterate(iter) => (iter.len(), 0),
         };
         (self_len.saturating_sub(other_len), Some(self_len))
@@ -1557,12 +1415,17 @@ impl<T> Clone for Intersection<'_, T> {
     fn clone(&self) -> Self {
         Intersection {
             inner: match &self.inner {
-                IntersectionInner::Stitch { a, b } => {
-                    IntersectionInner::Stitch { a: a.clone(), b: b.clone() }
-                }
-                IntersectionInner::Search { small_iter, large_set } => {
-                    IntersectionInner::Search { small_iter: small_iter.clone(), large_set }
-                }
+                IntersectionInner::Stitch { a, b } => IntersectionInner::Stitch {
+                    a: a.clone(),
+                    b: b.clone(),
+                },
+                IntersectionInner::Search {
+                    small_iter,
+                    large_set,
+                } => IntersectionInner::Search {
+                    small_iter: small_iter.clone(),
+                    large_set,
+                },
                 IntersectionInner::Answer(answer) => IntersectionInner::Answer(*answer),
             },
         }
@@ -1585,7 +1448,10 @@ impl<'a, T: Ord> Iterator for Intersection<'a, T> {
                     }
                 }
             }
-            IntersectionInner::Search { small_iter, large_set } => loop {
+            IntersectionInner::Search {
+                small_iter,
+                large_set,
+            } => loop {
                 let small_next = small_iter.next()?;
                 if large_set.contains(&small_next) {
                     return Some(small_next);
