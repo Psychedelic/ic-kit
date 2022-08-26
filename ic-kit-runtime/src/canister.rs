@@ -1021,35 +1021,64 @@ impl Ic0CallHandlerProxy for Canister {
     }
 
     fn stable_size(&mut self) -> Result<i32, String> {
-        todo!()
+        Ok(self
+            .stable
+            .stable_size()
+            .try_into()
+            .unwrap_or(i32::max_value()))
     }
 
     fn stable_grow(&mut self, new_pages: i32) -> Result<i32, String> {
-        todo!()
+        let size: i32 = self.stable.stable_size() as i32;
+        let max_size = i32::max_value();
+
+        if size + new_pages > max_size {
+            // do we return -1 ?
+            // Ok(-1)
+            Err(format!("Stable size cannot exceed {}.", max_size))
+        } else {
+            Ok(self
+                .stable
+                .stable_grow(new_pages.try_into().unwrap())
+                .try_into()
+                .unwrap())
+        }
     }
 
     fn stable_write(&mut self, _offset: i32, _src: isize, _size: isize) -> Result<(), String> {
-        todo!()
+        self.stable
+            .stable_write(_offset.try_into().unwrap(), copy_from_canister(_src, _size));
+
+        Ok(())
     }
 
-    fn stable_read(&mut self, _dst: isize, _offset: i32, _size: isize) -> Result<(), String> {
-        todo!()
+    fn stable_read(&mut self, dst: isize, offset: i32, size: isize) -> Result<(), String> {
+        let mut buf = vec![0u8; size as usize];
+        self.stable.stable_read(offset as u64, &mut buf);
+        copy_to_canister(dst, offset as isize, size, &buf)?;
+        Ok(())
     }
 
     fn stable64_size(&mut self) -> Result<i64, String> {
         Ok(self.stable.stable_size() as i64)
     }
 
-    fn stable64_grow(&mut self, _new_pages: i64) -> Result<i64, String> {
-        todo!()
+    fn stable64_grow(&mut self, new_pages: i64) -> Result<i64, String> {
+        Ok(self.stable.stable_grow(new_pages as u64) as i64)
     }
 
-    fn stable64_write(&mut self, _offset: i64, _src: i64, _size: i64) -> Result<(), String> {
-        todo!()
+    fn stable64_write(&mut self, offset: i64, src: i64, size: i64) -> Result<(), String> {
+        Ok(self.stable.stable_write(
+            offset as u64,
+            copy_from_canister(src as isize, size as isize),
+        ))
     }
 
-    fn stable64_read(&mut self, _dst: i64, _offset: i64, _size: i64) -> Result<(), String> {
-        todo!()
+    fn stable64_read(&mut self, dst: i64, offset: i64, size: i64) -> Result<(), String> {
+        let mut buf = vec![0u8; size as usize];
+        self.stable.stable_read(offset as u64, &mut buf);
+        copy_to_canister(dst as isize, offset as isize, size as isize, &buf)?;
+        Ok(())
     }
 
     fn certified_data_set(&mut self, _src: isize, _size: isize) -> Result<(), String> {
