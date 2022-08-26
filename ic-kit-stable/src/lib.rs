@@ -1,1 +1,3 @@
-pub mod core;
+mod core;
+
+pub use core::*;
