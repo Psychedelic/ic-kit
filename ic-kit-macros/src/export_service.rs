@@ -229,6 +229,15 @@ pub fn export_service(input: DeriveInput, save_candid_path: Option<syn::LitStr>)
             }
         }
 
+        #[doc(hidden)]
+        #[export_name = "canister_query __get_candid_interface_tmp_hack"]
+        fn _ic_kit_canister_query___get_candid_interface_tmp_hack() {
+            let candid = #name::candid();
+            let bytes = ic_kit::candid::encode_one(candid)
+                .expect("Could not encode canister's response.");
+            ic_kit::utils::reply(&bytes);
+        }
+
         #save_candid
     }
 }
