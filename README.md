@@ -78,8 +78,8 @@ let count = with_mut(|counter: &mut Counter| {
 
 ### Dependency Injection
 
-Now you sync (non-async) methods can be simplified, we wrap them in the appropriate `with` and `with_mut` methods for you
-so you don't hae to think about it.
+Now your sync (non-async) methods can be simplified, we wrap them in the appropriate `with` and `with_mut` methods for you
+so you don't have to think about it.
 
 ```rust
 use ic_kit::prelude::*;
