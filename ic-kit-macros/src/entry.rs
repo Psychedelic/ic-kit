@@ -55,6 +55,7 @@ impl EntryPoint {
 struct Config {
     name: Option<String>,
     guard: Option<String>,
+    hidden: Option<bool>,
 }
 
 /// Process a rust syntax and generate the code for processing it.
@@ -262,14 +263,17 @@ pub fn gen_entry_point_code(
         }
     };
 
-    declare(
-        entry_point,
-        name.clone(),
-        candid_name,
-        can_args,
-        can_types,
-        &signature.output,
-    )?;
+    // only declare candid if hide is false
+    if !attrs.hidden.unwrap_or(false) {
+        declare(
+            entry_point,
+            name.clone(),
+            candid_name,
+            can_args,
+            can_types,
+            &signature.output,
+        )?;
+    }
 
     Ok(quote! {
         #[doc(hidden)]
