@@ -307,7 +307,7 @@ struct ProcessedArgs {
     mut_args: Vec<(Ident, syn::Type)>,
     imu_args: Vec<(Ident, syn::Type)>,
     can_args: Vec<(Ident, syn::Type)>,
-    injected_types: Vec<syn::Type>,
+    injected: Vec<syn::Type>,
 }
 
 fn di(args: Vec<(Ident, syn::Type)>, is_async: bool) -> Result<ProcessedArgs, Error> {
@@ -329,30 +329,24 @@ fn di(args: Vec<(Ident, syn::Type)>, is_async: bool) -> Result<ProcessedArgs, Er
                     format!("An IC-kit dependency injected reference could only come before canister arguments."),
                 ));
             }
+            syn::Type::Reference(ty_ref) if result.injected.contains(&ty_ref.elem) => {
+                return Err(Error::new(
+                    ty_ref.span(),
+                    format!(
+                        "IC-Kit's dependency injection can only inject one instance of each type."
+                    ),
+                ));
+            }
             syn::Type::Reference(ty_ref) if ty_ref.mutability.is_some() => {
                 result.mut_args.push((ident, *ty_ref.elem.clone()));
-                if !result.injected_types.contains(&ty_ref.elem) {
-                    result.injected_types.push(*ty_ref.elem);
-                } else {
-                    return Err(Error::new(
-                        ty_ref.span(),
-                        format!("IC-Kit's dependency injection can only inject one instance of each type."),
-                    ));
-                }
+                result.injected.push(*ty_ref.elem);
             }
             syn::Type::Reference(ty_ref) => {
                 result.imu_args.push((ident, *ty_ref.elem.clone()));
-                if !result.injected_types.contains(&ty_ref.elem) {
-                    result.injected_types.push(*ty_ref.elem);
-                } else {
-                    return Err(Error::new(
-                        ty_ref.span(),
-                        format!("IC-Kit's dependency injection can only inject one instance of each type."),
-                    ));
-                }
+                result.injected.push(*ty_ref.elem);
             }
             ty => {
-                result.can_args.push((ident, ty.clone()));
+                result.can_args.push((ident, ty));
             }
         }
     }
