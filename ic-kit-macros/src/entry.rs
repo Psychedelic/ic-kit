@@ -264,16 +264,15 @@ pub fn gen_entry_point_code(
     };
 
     // only declare candid if hide is false
-    if !attrs.hidden.unwrap_or(false) {
-        declare(
-            entry_point,
-            name.clone(),
-            candid_name,
-            can_args,
-            can_types,
-            &signature.output,
-        )?;
-    }
+    declare(
+        entry_point,
+        name.clone(),
+        candid_name,
+        attrs.hidden.unwrap_or(false),
+        can_args,
+        can_types,
+        &signature.output,
+    )?;
 
     Ok(quote! {
         #[doc(hidden)]
