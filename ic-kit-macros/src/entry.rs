@@ -109,6 +109,13 @@ pub fn gen_entry_point_code(
         ));
     }
 
+    if entry_point.is_lifecycle() && attrs.hidden.is_some() {
+        return Err(Error::new(
+            Span::call_site(),
+            format!("#[{}] function cannot be hidden.", entry_point),
+        ));
+    }
+
     if entry_point.is_inspect_message() && return_length != 1 {
         return Err(Error::new(
             Span::call_site(),
