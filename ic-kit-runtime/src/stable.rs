@@ -14,6 +14,21 @@ pub struct FileSystemStableMemory {
     _file: MmapMut,
 }
 
+impl StableMemoryBackend for FileSystemStableMemory {
+    fn stable_size(&mut self) -> u64 {
+        todo!()
+    }
+    fn stable_grow(&mut self, _new_pages: u64) -> i64 {
+        todo!()
+    }
+    fn stable_read(&mut self, _offset: u64, _buf: &mut [u8]) {
+        todo!()
+    }
+    fn stable_write(&mut self, _offset: u64, _buf: &[u8]) {
+        todo!()
+    }
+}
+
 /// An stable storage backend that stores everything in the heap. By default it has a 128MB limit.
 pub struct HeapStableMemory {
     pages: Vec<[u8; 1 << 16]>,
