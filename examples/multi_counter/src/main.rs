@@ -1,0 +1,2 @@
+mod canister;
+fn main() {}

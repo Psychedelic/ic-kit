@@ -8,6 +8,6 @@ edition = "2021"
 [dependencies]
 ic-kit = {path="../../ic-kit"}
 
-[lib]
-crate-type = ["cdylib"]
-path = "src/lib.rs"
+[[bin]]
+name = "ic_kit_example_naming_system"
+path = "src/main.rs"

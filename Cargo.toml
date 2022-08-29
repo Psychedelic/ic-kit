@@ -2,8 +2,9 @@
 members = [
     "e2e",
     "examples/counter",
-    "examples/naming_system",
     "examples/fib",
+    "examples/multi_counter",
+    "examples/naming_system",
     "ic-kit",
     "ic-kit-certified",
     "ic-kit-stable",
