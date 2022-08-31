@@ -1,1 +1,1 @@
-service : { increment : () -> () }
+service : { add_counter : (principal) -> (); increment : () -> () }

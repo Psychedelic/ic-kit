@@ -286,8 +286,19 @@ pub fn gen_entry_point_code(
             }
         }
 
+        #[cfg(target_family = "wasm")]
         #[doc(hidden)]
         #[export_name = #export_name]
+        fn #outer_function_ident() {
+            #[cfg(target_family = "wasm")]
+            ic_kit::setup_hooks();
+
+            #guard
+            #body
+        }
+
+        #[cfg(not(target_family = "wasm"))]
+        #[doc(hidden)]
         fn #outer_function_ident() {
             #[cfg(target_family = "wasm")]
             ic_kit::setup_hooks();
