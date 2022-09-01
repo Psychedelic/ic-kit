@@ -55,6 +55,7 @@ impl EntryPoint {
 struct Config {
     name: Option<String>,
     guard: Option<String>,
+    hidden: Option<bool>,
 }
 
 /// Process a rust syntax and generate the code for processing it.
@@ -94,20 +95,6 @@ pub fn gen_entry_point_code(
         ));
     }
 
-    if entry_point.is_lifecycle() && !entry_point.is_inspect_message() && return_length > 0 {
-        return Err(Error::new(
-            signature.output.span(),
-            format!("#[{}] function cannot have a return value.", entry_point),
-        ));
-    }
-
-    if entry_point.is_lifecycle() && attrs.name.is_some() {
-        return Err(Error::new(
-            Span::call_site(),
-            format!("#[{}] function cannot be renamed.", entry_point),
-        ));
-    }
-
     if entry_point.is_inspect_message() && return_length != 1 {
         return Err(Error::new(
             Span::call_site(),
@@ -118,18 +105,42 @@ pub fn gen_entry_point_code(
         ));
     }
 
-    if entry_point.is_lifecycle() && attrs.guard.is_some() {
-        return Err(Error::new(
-            Span::call_site(),
-            format!("#[{}] function cannot have a guard", entry_point),
-        ));
-    }
+    // Lifecycle functions have some restrictions
+    if entry_point.is_lifecycle() {
+        if !entry_point.is_inspect_message() && return_length > 0 {
+            return Err(Error::new(
+                signature.output.span(),
+                format!("#[{}] function cannot have a return value.", entry_point),
+            ));
+        }
 
-    if entry_point.is_lifecycle() && is_async {
-        return Err(Error::new(
-            Span::call_site(),
-            format!("#[{}] function cannot be async.", entry_point),
-        ));
+        if attrs.name.is_some() {
+            return Err(Error::new(
+                Span::call_site(),
+                format!("#[{}] function cannot be renamed.", entry_point),
+            ));
+        }
+
+        if attrs.hidden.is_some() {
+            return Err(Error::new(
+                Span::call_site(),
+                format!("#[{}] function cannot be hidden.", entry_point),
+            ));
+        }
+
+        if attrs.guard.is_some() {
+            return Err(Error::new(
+                Span::call_site(),
+                format!("#[{}] function cannot have a guard", entry_point),
+            ));
+        }
+
+        if is_async {
+            return Err(Error::new(
+                Span::call_site(),
+                format!("#[{}] function cannot be async.", entry_point),
+            ));
+        }
     }
 
     let outer_function_ident = Ident::new(
@@ -262,10 +273,12 @@ pub fn gen_entry_point_code(
         }
     };
 
+    // only declare candid if hide is false
     declare(
         entry_point,
         name.clone(),
         candid_name,
+        attrs.hidden.unwrap_or(false),
         can_args,
         can_types,
         &signature.output,

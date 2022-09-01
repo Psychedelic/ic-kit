@@ -7,6 +7,7 @@ use std::sync::Mutex;
 use syn::{DeriveInput, Error};
 
 struct Method {
+    hidden: bool,
     mode: EntryPoint,
     rust_name: String,
     _arg_names: Vec<String>,
@@ -23,6 +24,7 @@ pub(crate) fn declare(
     entry_point: EntryPoint,
     rust_name: Ident,
     name: String,
+    hidden: bool,
     can_args: Vec<Ident>,
     can_types: Vec<syn::Type>,
     rt: &syn::ReturnType,
@@ -41,6 +43,7 @@ pub(crate) fn declare(
     };
 
     let method = Method {
+        hidden,
         mode: entry_point,
         rust_name: rust_name.to_string(),
         _arg_names: can_args.iter().map(|i| i.to_string()).collect(),
@@ -113,6 +116,7 @@ pub fn export_service(input: DeriveInput, save_candid_path: Option<syn::LitStr>)
                 arg_types,
                 rets,
                 mode,
+                hidden,
                 ..
             },
         )| {
@@ -134,15 +138,19 @@ pub fn export_service(input: DeriveInput, save_candid_path: Option<syn::LitStr>)
                 _ => unreachable!(),
             };
 
-            quote! {
-                {
-                    let mut args = Vec::new();
-                    #(#args)*
-                    let mut rets = Vec::new();
-                    #(#rets)*
-                    let func = Function { args, rets, modes: #modes };
-                    service.push((#name.to_string(), Type::Func(func)));
+            if !hidden {
+                quote! {
+                    {
+                        let mut args = Vec::new();
+                        #(#args)*
+                        let mut rets = Vec::new();
+                        #(#rets)*
+                        let func = Function { args, rets, modes: #modes };
+                        service.push((#name.to_string(), Type::Func(func)));
+                    }
                 }
+            } else {
+                quote! {}
             }
         },
     );
