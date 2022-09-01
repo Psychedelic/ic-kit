@@ -80,9 +80,8 @@ mod tests {
             .await;
 
         // Do a proxy increment call.
-
-        // TODO(qti3e) What the hell is going on here?
         let x = canister.new_call("increment").perform().await;
+
         println!("{:#?}", x);
     }
 }

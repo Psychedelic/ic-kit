@@ -179,6 +179,7 @@ pub fn export_service(input: DeriveInput, save_candid_path: Option<syn::LitStr>)
             #[cfg(test)]
             #[test]
             fn ic_kit_save_candid() {
+                use ic_kit::KitCanister;
                 use std::env;
                 use std::fs;
                 use std::path::PathBuf;
@@ -212,7 +213,7 @@ pub fn export_service(input: DeriveInput, save_candid_path: Option<syn::LitStr>)
     };
 
     quote! {
-        impl KitCanister for #name {
+        impl ic_kit::KitCanister for #name {
             #[cfg(not(target_family = "wasm"))]
             fn build(canister_id: ic_kit::Principal) -> ic_kit::rt::Canister {
                 ic_kit::rt::Canister::new(canister_id)

@@ -2,6 +2,7 @@
 members = [
     "e2e",
     "examples/counter",
+    "examples/factory_counter",
     "examples/fib",
     "examples/multi_counter",
     "examples/naming_system",
