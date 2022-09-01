@@ -1,1 +1,1 @@
-service : { add_counter : (principal) -> (); increment : () -> () }
+service : { deploy_counter : () -> (principal) }

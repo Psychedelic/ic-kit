@@ -2,4 +2,4 @@
 //! canister.
 
 pub mod canister;
-pub use canister::MultiCounterCanister;
+pub use canister::FactoryCounterCanister;

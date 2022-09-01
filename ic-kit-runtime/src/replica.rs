@@ -1,5 +1,21 @@
+//! Implementation of a Internet Computer's replica actor model. A replica can contain any number of
+//! canisters and a canister, user should be able to send messages to a canister and await for the
+//! response of the call. And the canister's should also be able to send messages to another canister.
+//!
+//! Different canister should operate in parallel, but each canister can only process one request
+//! at a time.
+//!
+//! In this implementation this is done by starting different event loops for each canister and doing
+//! cross worker communication using Tokio's mpsc channels, the Replica object itself does not hold
+//! the replica's state for this reason, it only owns a mpsc sender that it can use to pass messages
+//! to the replica's event loop, so messages are queued one by one.
+//!
+//! This also allows the canister event loops to have accesses to the replica without any borrows by
+//! just sending their request to the same channel, causing the replica to process the messages.
+
 use crate::call::{CallBuilder, CallReply};
 use crate::canister::Canister;
+use crate::handle::CanisterHandle;
 use crate::types::*;
 use ic_kit_sys::types::RejectionCode;
 use ic_types::Principal;
@@ -10,16 +26,22 @@ use tokio::sync::{mpsc, oneshot};
 
 /// A local replica that contains one or several canisters.
 pub struct Replica {
+    // The current implementation uses a `tokio::spawn` to run an event loop for the replica,
+    // the state of the replica is store in that event loop.
     sender: mpsc::UnboundedSender<ReplicaMessage>,
 }
 
-pub struct CanisterHandle<'a> {
-    replica: &'a Replica,
-    canister_id: Principal,
+/// The state of the replica, it does not live inside the replica itself, but an instance of it
+/// is created in the replica worker, and messages from the `Replica` are transmitted to this
+/// object using an async channel.
+#[derive(Default)]
+struct ReplicaState {
+    /// Map each of the current canisters to the receiver of that canister's event loop.
+    canisters: HashMap<Principal, mpsc::UnboundedSender<ReplicaCanisterRequest>>,
 }
 
-/// A message we want to send to a canister.
-struct CanisterMessage {
+/// A message that Replica wants to send to a canister to be processed.
+struct ReplicaCanisterRequest {
     message: Message,
     reply_sender: Option<oneshot::Sender<CallReply>>,
 }
@@ -27,7 +49,7 @@ struct CanisterMessage {
 enum ReplicaMessage {
     CanisterAdded {
         canister_id: Principal,
-        channel: mpsc::UnboundedSender<CanisterMessage>,
+        channel: mpsc::UnboundedSender<ReplicaCanisterRequest>,
     },
     CanisterRequest {
         canister_id: Principal,
@@ -58,9 +80,10 @@ impl Replica {
 
         // Create a execution queue for the canister so we can send messages to the canister
         // asynchronously
-        let replica_sender = self.sender.clone();
+        let replica = self.sender.clone();
+
         let (tx, rx) = mpsc::unbounded_channel();
-        replica_sender
+        replica
             .send(ReplicaMessage::CanisterAdded {
                 canister_id,
                 channel: tx,
@@ -68,53 +91,7 @@ impl Replica {
             .unwrap_or_else(|_| panic!("ic-kit-runtime: could not send message to replica"));
 
         // Start the event loop for the canister.
-        tokio::spawn(async move {
-            let canister_id = canister.id();
-            let mut rx = rx;
-            let mut canister = canister;
-
-            while let Some(message) = rx.recv().await {
-                let perform_call = canister
-                    .process_message(message.message, message.reply_sender)
-                    .await;
-
-                for call in perform_call {
-                    let request_id = call.request_id;
-                    let (tx, rx) = oneshot::channel();
-
-                    replica_sender
-                        .send(ReplicaMessage::CanisterRequest {
-                            canister_id: call.callee,
-                            message: call.into(),
-                            reply_sender: Some(tx),
-                        })
-                        .unwrap_or_else(|_| {
-                            panic!("ic-kit-runtime: could not send message to replica")
-                        });
-
-                    let rs = replica_sender.clone();
-                    tokio::spawn(async move {
-                        let replica_sender = rs;
-
-                        // wait for the response from the destination canister.
-                        let response = rx.await.expect(
-                            "ic-kit-runtime: Could not get the response of inter-canister call.",
-                        );
-
-                        let message = response.to_message(request_id);
-
-                        replica_sender
-                            .send(ReplicaMessage::CanisterReply {
-                                canister_id,
-                                message,
-                            })
-                            .unwrap_or_else(|_| {
-                                panic!("ic-kit-runtime: could not send message to replica")
-                            });
-                    });
-                }
-            }
-        });
+        tokio::spawn(canister_worker(rx, replica, canister));
 
         CanisterHandle {
             replica: self,
@@ -167,147 +144,155 @@ impl Replica {
 }
 
 impl Default for Replica {
+    /// Create an empty replica and run the start the event loop.
     fn default() -> Self {
         let (sender, rx) = mpsc::unbounded_channel::<ReplicaMessage>();
-
-        tokio::spawn(async move {
-            let mut rx = rx;
-            let mut canisters = HashMap::<Principal, mpsc::UnboundedSender<CanisterMessage>>::new();
-
-            while let Some(m) = rx.recv().await {
-                match m {
-                    ReplicaMessage::CanisterAdded { canister_id, .. }
-                        if canisters.contains_key(&canister_id) =>
-                    {
-                        panic!(
-                            "Canister '{}' is already defined in the replica.",
-                            canister_id
-                        )
-                    }
-                    ReplicaMessage::CanisterAdded {
-                        canister_id,
-                        channel,
-                    } => {
-                        canisters.insert(canister_id, channel);
-                    }
-                    ReplicaMessage::CanisterRequest {
-                        canister_id,
-                        message,
-                        reply_sender,
-                    } => {
-                        if let Some(chan) = canisters.get(&canister_id) {
-                            chan.send(CanisterMessage {
-                                message,
-                                reply_sender,
-                            })
-                            .unwrap_or_else(|_| {
-                                panic!("ic-kit-runtime: Could not enqueue the request.")
-                            });
-                        } else {
-                            let cycles_refunded = match message {
-                                Message::CustomTask { env, .. } => env.cycles_available,
-                                Message::Request { env, .. } => env.cycles_refunded,
-                                Message::Reply { .. } => 0,
-                            };
-
-                            reply_sender
-                                .unwrap()
-                                .send(CallReply::Reject {
-                                    rejection_code: RejectionCode::DestinationInvalid,
-                                    rejection_message: format!(
-                                        "Canister '{}' does not exists",
-                                        canister_id
-                                    ),
-                                    cycles_refunded,
-                                })
-                                .expect("ic-kit-runtime: Could not send the response.");
-                        }
-                    }
-                    ReplicaMessage::CanisterReply {
-                        canister_id,
-                        message,
-                    } => {
-                        let chan = canisters.get(&canister_id).unwrap();
-                        chan.send(CanisterMessage {
-                            message,
-                            reply_sender: None,
-                        })
-                        .unwrap_or_else(|_| {
-                            panic!("ic-kit-runtime: Could not enqueue the response request.")
-                        });
-                    }
-                }
-            }
-        });
-
+        tokio::spawn(replica_worker(rx));
         Replica { sender }
     }
 }
 
-impl<'a> CanisterHandle<'a> {
-    /// Create a new call builder to call this canister.
-    pub fn new_call<S: Into<String>>(&self, method_name: S) -> CallBuilder {
-        CallBuilder::new(self.replica, self.canister_id, method_name.into())
+/// Run replica's event loop, gets ReplicaMessages and performs the state transition accordingly.
+async fn replica_worker(mut rx: mpsc::UnboundedReceiver<ReplicaMessage>) {
+    let mut state = ReplicaState::default();
+
+    while let Some(message) = rx.recv().await {
+        match message {
+            ReplicaMessage::CanisterAdded {
+                canister_id,
+                channel,
+            } => state.canister_added(canister_id, channel),
+            ReplicaMessage::CanisterRequest {
+                canister_id,
+                message,
+                reply_sender,
+            } => state.canister_request(canister_id, message, reply_sender),
+            ReplicaMessage::CanisterReply {
+                canister_id,
+                message,
+            } => state.canister_reply(canister_id, message),
+        }
+    }
+}
+
+/// Start a dedicated event loop for a canister, this will get CanisterMessage messages from a tokio
+/// channel and perform
+async fn canister_worker(
+    mut rx: mpsc::UnboundedReceiver<ReplicaCanisterRequest>,
+    mut replica: mpsc::UnboundedSender<ReplicaMessage>,
+    mut canister: Canister,
+) {
+    let canister_id = canister.id();
+
+    let mut rx = rx;
+    let mut canister = canister;
+
+    while let Some(message) = rx.recv().await {
+        // Perform the message on the canister's thread, the result containing a list of
+        // inter-canister call requests is returned here, so we can send each call back to
+        // replica.
+        let canister_requested_calls = canister
+            .process_message(message.message, message.reply_sender)
+            .await;
+
+        for call in canister_requested_calls {
+            // For each call a oneshot channel is created that is used to receive the response
+            // from the target canister. We then await for the response in a `tokio::spawn` to not
+            // block the current queue. Once the response is received we send it back as a
+            // `CanisterReply` back to the replica so it can perform the routing and send the
+            // response.
+            // This of course could be avoided if a sender to the same rx was passed to this method.
+            // TODO(qti3e) Do the optimization - we don't need to send the result to the replica
+            // just so that it queues to our own `rx`.
+            let request_id = call.request_id;
+            let (tx, rx) = oneshot::channel();
+
+            replica
+                .send(ReplicaMessage::CanisterRequest {
+                    canister_id: call.callee,
+                    message: call.into(),
+                    reply_sender: Some(tx),
+                })
+                .unwrap_or_else(|_| panic!("ic-kit-runtime: could not send message to replica"));
+
+            let rs = replica.clone();
+
+            tokio::spawn(async move {
+                let replica = rs;
+
+                // wait for the response from the destination canister.
+                let response = rx
+                    .await
+                    .expect("ic-kit-runtime: Could not get the response of inter-canister call.");
+
+                let message = response.to_message(request_id);
+
+                // once we have the result send it as a request to the current canister.
+                replica
+                    .send(ReplicaMessage::CanisterReply {
+                        canister_id,
+                        message,
+                    })
+                    .unwrap_or_else(|_| {
+                        panic!("ic-kit-runtime: could not send message to replica")
+                    });
+            });
+        }
+    }
+}
+
+impl ReplicaState {
+    pub fn canister_added(
+        &mut self,
+        canister_id: Principal,
+        channel: mpsc::UnboundedSender<ReplicaCanisterRequest>,
+    ) {
+        if self.canisters.contains_key(&canister_id) {
+            panic!(
+                "Canister '{}' is already defined in the replica.",
+                canister_id
+            )
+        }
+
+        self.canisters.insert(canister_id, channel);
     }
 
-    /// Run the given custom function in the execution thread of the canister.
-    pub async fn custom<F: FnOnce() + Send + RefUnwindSafe + UnwindSafe + 'static>(
-        &self,
-        f: F,
-        env: Env,
-    ) -> CallReply {
-        let (tx, rx) = oneshot::channel();
+    pub fn canister_request(
+        &mut self,
+        canister_id: Principal,
+        message: Message,
+        reply_sender: Option<oneshot::Sender<CallReply>>,
+    ) {
+        if let Some(chan) = self.canisters.get(&canister_id) {
+            chan.send(ReplicaCanisterRequest {
+                message,
+                reply_sender,
+            })
+            .unwrap_or_else(|_| panic!("ic-kit-runtime: Could not enqueue the request."));
+        } else {
+            let cycles_refunded = match message {
+                Message::CustomTask { env, .. } => env.cycles_available,
+                Message::Request { env, .. } => env.cycles_refunded,
+                Message::Reply { .. } => 0,
+            };
 
-        self.replica.enqueue_request(
-            self.canister_id,
-            Message::CustomTask {
-                request_id: RequestId::new(),
-                task: Box::new(f),
-                env,
-            },
-            Some(tx),
-        );
-
-        rx.await.unwrap()
+            reply_sender
+                .unwrap()
+                .send(CallReply::Reject {
+                    rejection_code: RejectionCode::DestinationInvalid,
+                    rejection_message: format!("Canister '{}' does not exists", canister_id),
+                    cycles_refunded,
+                })
+                .expect("ic-kit-runtime: Could not send the response.");
+        }
     }
 
-    /// Run the given raw message in the canister's execution thread.
-    pub async fn run_env(&self, env: Env) -> CallReply {
-        let (tx, rx) = oneshot::channel();
-
-        self.replica.enqueue_request(
-            self.canister_id,
-            Message::Request {
-                request_id: RequestId::new(),
-                env,
-            },
-            Some(tx),
-        );
-
-        rx.await.unwrap()
-    }
-
-    /// Runs the init hook of the canister. For more customization use [`CanisterHandle::run_env`]
-    /// with [`Env::init()`].
-    pub async fn init(&self) -> CallReply {
-        self.run_env(Env::init()).await
-    }
-
-    /// Runs the pre_upgrade hook of the canister. For more customization use
-    /// [`CanisterHandle::run_env`] with [`Env::pre_upgrade()`].
-    pub async fn pre_upgrade(&self) -> CallReply {
-        self.run_env(Env::pre_upgrade()).await
-    }
-
-    /// Runs the post_upgrade hook of the canister. For more customization use
-    /// [`CanisterHandle::run_env`] with [`Env::post_upgrade()`].
-    pub async fn post_upgrade(&self) -> CallReply {
-        self.run_env(Env::post_upgrade()).await
-    }
-
-    /// Runs the post_upgrade hook of the canister. For more customization use
-    /// [`CanisterHandle::run_env`] with [`Env::heartbeat()`].
-    pub async fn heartbeat(&self) -> CallReply {
-        self.run_env(Env::heartbeat()).await
+    fn canister_reply(&mut self, canister_id: Principal, message: Message) {
+        let chan = self.canisters.get(&canister_id).unwrap();
+        chan.send(ReplicaCanisterRequest {
+            message,
+            reply_sender: None,
+        })
+        .unwrap_or_else(|_| panic!("ic-kit-runtime: Could not enqueue the response request."));
     }
 }
