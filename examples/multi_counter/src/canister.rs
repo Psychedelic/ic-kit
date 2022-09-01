@@ -13,11 +13,9 @@ fn increment(counters: &MultiCounter) {
     for &canister_id in counters.canister_ids.iter() {
         println!("Increment on {}", canister_id);
 
-        spawn(async move {
-            CallBuilder::new(canister_id, "increment")
-                .perform_one_way()
-                .expect("Expected the one way call to succeed.");
-        });
+        CallBuilder::new(canister_id, "increment")
+            .perform_one_way()
+            .expect("Expected the one way call to succeed.");
     }
 }
 
@@ -81,6 +79,8 @@ mod tests {
 
         // Do a proxy increment call.
         let x = canister.new_call("increment").perform().await;
+
+        // TODO(qti3e) replica.idle.await
 
         println!("{:#?}", x);
     }

@@ -8,10 +8,11 @@ members = [
     "examples/naming_system",
     "ic-kit",
     "ic-kit-certified",
+    "ic-kit-macros",
+    "ic-kit-management",
+    "ic-kit-runtime",
     "ic-kit-stable",
     "ic-kit-sys",
-    "ic-kit-macros",
-    "ic-kit-runtime",
 ]
 
 [profile.canister-release]
