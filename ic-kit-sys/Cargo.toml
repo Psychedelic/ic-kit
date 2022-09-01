@@ -1,14 +1,16 @@
 [package]
 name = "ic-kit-sys"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
-authors = ["Parsa Ghadimi <i@parsa.ooo>"]
+authors = ["Parsa Ghadimi <i@parsa.ooo>", "Ossian Mapes <oz@fleek.co>"]
 description = "IC-Kit's API bindings to the Internet Computer's WASM runtime."
-license = "GPL-3.0"
+license = "MIT"
+readme = "README.md"
 repository = "https://github.com/Psychedelic/ic-kit"
 documentation = "https://docs.rs/ic-kit-sys"
+homepage = "https://sly.ooo"
 categories = ["api-bindings", "development-tools::testing"]
-keywords = ["internet-computer", "canister", "cdk", "fleek"]
+keywords = ["internet-computer", "canister", "fleek", "psychedelic"]
 include = ["src", "Cargo.toml", "README.md"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

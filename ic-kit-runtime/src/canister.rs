@@ -1,4 +1,5 @@
 use crate::call::CallReply;
+use crate::stable::{HeapStableMemory, StableMemoryBackend};
 use crate::types::*;
 use futures::executor::block_on;
 use ic_kit_sys::ic0;
@@ -47,6 +48,8 @@ pub struct Canister {
     outgoing_calls: HashMap<OutgoingRequestId, RequestCallbacks>,
     /// The canister execution environment.
     env: Env,
+    /// The stable storage backend for this canister.
+    stable: Box<dyn StableMemoryBackend + Send>,
     /// The request id of the current incoming message.
     request_id: Option<IncomingRequestId>,
     /// The calls that are finalized and should be sent after this entry point's successful
@@ -161,6 +164,7 @@ impl Canister {
             pending_outgoing_requests: HashMap::new(),
             outgoing_calls: HashMap::new(),
             env: Env::default(),
+            stable: Box::new(HeapStableMemory::default()),
             request_id: None,
             call_queue: Vec::with_capacity(8),
             pending_call: None,
@@ -187,6 +191,12 @@ impl Canister {
         }
 
         self.symbol_table.insert(method_name, task_fn);
+        self
+    }
+
+    /// Provide the canister with this stable storage backend.
+    pub fn with_stable(mut self, stable: Box<dyn StableMemoryBackend + Send>) -> Self {
+        self.stable = stable;
         self
     }
 
@@ -1011,35 +1021,57 @@ impl Ic0CallHandlerProxy for Canister {
     }
 
     fn stable_size(&mut self) -> Result<i32, String> {
-        todo!()
+        match self.stable.stable_size().try_into() {
+            Ok(size) => Ok(size),
+            Err(_) => Err("Invalid stable size".into()),
+        }
     }
 
-    fn stable_grow(&mut self, _new_pages: i32) -> Result<i32, String> {
-        todo!()
+    fn stable_grow(&mut self, new_pages: i32) -> Result<i32, String> {
+        let size = self.stable.stable_size() as i32;
+        let max_size = i32::max_value();
+
+        if size + new_pages > max_size {
+            Ok(-1)
+        } else {
+            Ok(self.stable.stable_grow(new_pages as u64) as i32)
+        }
     }
 
     fn stable_write(&mut self, _offset: i32, _src: isize, _size: isize) -> Result<(), String> {
-        todo!()
+        self.stable
+            .stable_write(_offset as u64, copy_from_canister(_src, _size));
+
+        Ok(())
     }
 
-    fn stable_read(&mut self, _dst: isize, _offset: i32, _size: isize) -> Result<(), String> {
-        todo!()
+    fn stable_read(&mut self, dst: isize, offset: i32, size: isize) -> Result<(), String> {
+        let mut buf = vec![0u8; size as usize];
+        self.stable.stable_read(offset as u64, &mut buf);
+        copy_to_canister(dst, offset as isize, size, &buf)?;
+        Ok(())
     }
 
     fn stable64_size(&mut self) -> Result<i64, String> {
-        todo!()
+        Ok(self.stable.stable_size() as i64)
     }
 
-    fn stable64_grow(&mut self, _new_pages: i64) -> Result<i64, String> {
-        todo!()
+    fn stable64_grow(&mut self, new_pages: i64) -> Result<i64, String> {
+        Ok(self.stable.stable_grow(new_pages as u64) as i64)
     }
 
-    fn stable64_write(&mut self, _offset: i64, _src: i64, _size: i64) -> Result<(), String> {
-        todo!()
+    fn stable64_write(&mut self, offset: i64, src: i64, size: i64) -> Result<(), String> {
+        Ok(self.stable.stable_write(
+            offset as u64,
+            copy_from_canister(src as isize, size as isize),
+        ))
     }
 
-    fn stable64_read(&mut self, _dst: i64, _offset: i64, _size: i64) -> Result<(), String> {
-        todo!()
+    fn stable64_read(&mut self, dst: i64, offset: i64, size: i64) -> Result<(), String> {
+        let mut buf = vec![0u8; size as usize];
+        self.stable.stable_read(offset as u64, &mut buf);
+        copy_to_canister(dst as isize, offset as isize, size as isize, &buf)?;
+        Ok(())
     }
 
     fn certified_data_set(&mut self, _src: isize, _size: isize) -> Result<(), String> {

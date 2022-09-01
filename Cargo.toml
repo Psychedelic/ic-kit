@@ -1,17 +1,22 @@
 [workspace]
 members = [
+    "e2e",
     "examples/counter",
-    "examples/naming_system",
+    "examples/factory_counter",
     "examples/fib",
+    "examples/multi_counter",
+    "examples/naming_system",
     "ic-kit",
+    "ic-kit-certified",
+    "ic-kit-stable",
     "ic-kit-sys",
     "ic-kit-macros",
     "ic-kit-runtime",
 ]
 
-[profile.release]
+[profile.canister-release]
+inherits = "release"
+debug = false
+panic = "abort"
 lto = true
 opt-level = 'z'
-
-[patch.crates-io]
-num-bigint = { git = "https://github.com/rust-num/num-bigint" }

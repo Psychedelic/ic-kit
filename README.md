@@ -18,7 +18,7 @@ Add this to your `Cargo.toml`
 
 ```toml
 [dependencies]
-ic-kit = "0.5.0-alpha.0"
+ic-kit = "0.5.0-alpha.4"
 candid = "0.7"
 ```
 

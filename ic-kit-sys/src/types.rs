@@ -66,7 +66,7 @@ impl fmt::Display for CallError {
 impl error::Error for CallError {}
 
 /// A possible error value when dealing with stable memory.
-#[derive(Debug)]
+#[derive(Debug, Eq, PartialEq)]
 pub enum StableMemoryError {
     /// No more stable memory could be allocated.
     OutOfMemory,
