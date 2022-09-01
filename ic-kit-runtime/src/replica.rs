@@ -1,9 +1,8 @@
 //! Implementation of a Internet Computer's replica actor model. A replica can contain any number of
-//! canisters and a canister, user should be able to send messages to a canister and await for the
-//! response of the call. And the canister's should also be able to send messages to another canister.
+//! canisters, a user should be able to send messages to a canister and await for the response of
+//! the call. And the any canister should also be able to send messages to another canister.
 //!
-//! Different canister should operate in parallel, but each canister can only process one request
-//! at a time.
+//! Different canister operate in parallel, but each canister can only process one request at a time.
 //!
 //! In this implementation this is done by starting different event loops for each canister and doing
 //! cross worker communication using Tokio's mpsc channels, the Replica object itself does not hold
