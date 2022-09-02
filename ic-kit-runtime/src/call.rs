@@ -101,12 +101,12 @@ impl<'a> CallBuilder<'a> {
 
 impl CallReply {
     /// Convert the reply to a message that can be delivered to a canister.
-    pub(crate) fn to_message(self, reply_to: OutgoingRequestId) -> Message {
+    pub(crate) fn to_message(self, reply_to: OutgoingRequestId) -> CanisterMessage {
         match self {
             CallReply::Reply {
                 data,
                 cycles_refunded,
-            } => Message::Reply {
+            } => CanisterMessage::Reply {
                 reply_to,
                 env: Env::default()
                     .with_entry_mode(EntryMode::ReplyCallback)
@@ -117,7 +117,7 @@ impl CallReply {
                 rejection_code,
                 rejection_message,
                 cycles_refunded,
-            } => Message::Reply {
+            } => CanisterMessage::Reply {
                 reply_to,
                 env: Env::default()
                     .with_entry_mode(EntryMode::RejectCallback)

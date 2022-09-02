@@ -1,5 +1,5 @@
 use crate::call::{CallBuilder, CallReply};
-use crate::types::{Env, Message, RequestId};
+use crate::types::{CanisterMessage, Env, RequestId};
 use crate::Replica;
 use ic_types::Principal;
 use std::panic::{RefUnwindSafe, UnwindSafe};
@@ -26,7 +26,7 @@ impl<'a> CanisterHandle<'a> {
 
         self.replica.enqueue_request(
             self.canister_id,
-            Message::CustomTask {
+            CanisterMessage::CustomTask {
                 request_id: RequestId::new(),
                 task: Box::new(f),
                 env,
@@ -43,7 +43,7 @@ impl<'a> CanisterHandle<'a> {
 
         self.replica.enqueue_request(
             self.canister_id,
-            Message::Request {
+            CanisterMessage::Request {
                 request_id: RequestId::new(),
                 env,
             },

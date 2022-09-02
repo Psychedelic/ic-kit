@@ -70,7 +70,7 @@ pub type TaskFn = Box<dyn FnOnce() + Send + RefUnwindSafe + UnwindSafe>;
 
 /// A message sent to a canister that trigger execution of a task on the canister's execution thread
 /// based on the type of the message.
-pub enum Message {
+pub enum CanisterMessage {
     /// A custom function that you want to be executed in the canister's execution thread.
     CustomTask {
         /// The request id of this incoming message.
@@ -109,9 +109,9 @@ pub struct CanisterCall {
     pub arg: Vec<u8>,
 }
 
-impl From<CanisterCall> for Message {
+impl From<CanisterCall> for CanisterMessage {
     fn from(call: CanisterCall) -> Self {
-        Message::Request {
+        CanisterMessage::Request {
             request_id: call.request_id,
             env: Env::default()
                 .with_entry_mode(EntryMode::Update)
