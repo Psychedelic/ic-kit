@@ -163,6 +163,14 @@ async fn replica_worker(
         created: Default::default(),
     };
 
+    // Run the management canister, this will make the reset of the code to work as if the management
+    // canister is actually a canister.
+    {
+        let (tx, rx) = mpsc::unbounded_channel();
+        tokio::spawn(management_canister_worker(state.sender.clone(), rx));
+        state.canisters.insert(Principal::management_canister(), tx);
+    }
+
     while let Some(message) = rx.recv().await {
         match message {
             ReplicaWorkerMessage::CreateCanister { reply_sender } => {
@@ -204,6 +212,7 @@ async fn canister_worker(
     }
 }
 
+/// Run a request against the canister.
 async fn perform_canister_request(
     canister: &mut Canister,
     replica: &mut mpsc::UnboundedSender<ReplicaWorkerMessage>,
@@ -257,6 +266,23 @@ async fn perform_canister_request(
                 })
                 .unwrap_or_else(|_| panic!("ic-kit-runtime: could not send message to replica"));
         });
+    }
+}
+
+/// Run the worker for the management canister.
+async fn management_canister_worker(
+    replica: mpsc::UnboundedSender<ReplicaWorkerMessage>,
+    mut rx: mpsc::UnboundedReceiver<CanisterWorkerMessage>,
+) {
+    while let Some(message) = rx.recv().await {
+        match message {
+            CanisterWorkerMessage::Message {
+                message,
+                reply_sender,
+            } => {
+                todo!("Management canister not implemented.")
+            }
+        };
     }
 }
 

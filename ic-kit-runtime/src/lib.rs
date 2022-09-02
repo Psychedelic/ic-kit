@@ -12,7 +12,6 @@ cfg_if::cfg_if! {
         pub mod types;
         pub mod users;
         pub mod handle;
-        pub mod management;
 
         pub use canister::{Canister, CanisterMethod};
         pub use replica::Replica;
