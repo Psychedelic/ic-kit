@@ -16,12 +16,17 @@ use crate::call::{CallBuilder, CallReply};
 use crate::canister::Canister;
 use crate::handle::CanisterHandle;
 use crate::types::*;
+use candid::decode_one;
 use ic_kit_sys::types::RejectionCode;
 use ic_types::Principal;
+use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::future::Future;
-use std::panic::{RefUnwindSafe, UnwindSafe};
 use tokio::sync::{mpsc, oneshot};
+
+thread_local! {
+    static REPLICA: RefCell<Option<mpsc::UnboundedSender<ReplicaWorkerMessage>>> = RefCell::new(None);
+}
 
 /// A local replica that contains one or several canisters.
 pub struct Replica {
@@ -271,18 +276,58 @@ async fn perform_canister_request(
 
 /// Run the worker for the management canister.
 async fn management_canister_worker(
-    replica: mpsc::UnboundedSender<ReplicaWorkerMessage>,
+    mut replica: mpsc::UnboundedSender<ReplicaWorkerMessage>,
     mut rx: mpsc::UnboundedReceiver<CanisterWorkerMessage>,
 ) {
     while let Some(message) = rx.recv().await {
         match message {
             CanisterWorkerMessage::Message {
-                message,
-                reply_sender,
+                message: CanisterMessage::Request { env, .. },
+                reply_sender: Some(sender),
             } => {
-                todo!("Management canister not implemented.")
+                let reply = handle_management_method(&mut replica, env).await;
+                sender
+                    .send(reply)
+                    .expect("ic-kit-runtime: could not send management response.");
             }
+            CanisterWorkerMessage::Message {
+                reply_sender: Some(sender),
+                ..
+            } => sender
+                .send(CallReply::Reject {
+                    rejection_code: RejectionCode::Unknown,
+                    rejection_message: "ic-kit-runtime: unexpected call to management canister."
+                        .to_string(),
+                    cycles_refunded: 0,
+                })
+                .expect("ic-kit-runtime: could not send management response."),
+            _ => panic!("Unexpected call to management canister."),
         };
+    }
+}
+
+async fn handle_management_method(
+    replica: &mut mpsc::UnboundedSender<ReplicaWorkerMessage>,
+    env: Env,
+) -> CallReply {
+    let method_name = env.method_name.unwrap();
+    println!("mgmt - {}", method_name);
+
+    if method_name == "ic_kit_install" {
+        let arg = decode_one::<usize>(env.args.as_slice()).unwrap();
+        let canister = unsafe {
+            let ptr = arg as *mut u8 as *mut Canister;
+            *Box::from_raw(ptr)
+        };
+
+        replica
+            .send(ReplicaWorkerMessage::InstallCode { canister })
+            .unwrap_or_else(|_| panic!("ic-kit-runtime: could not send message to replica"));
+    }
+
+    CallReply::Reply {
+        data: vec![],
+        cycles_refunded: 0,
     }
 }
 
@@ -311,6 +356,8 @@ impl ReplicaState {
 
     /// Install the given canister.
     pub fn install_code(&mut self, canister: Canister) {
+        println!("Installing code for canister {}", canister.id());
+
         let canister_id = canister.id();
 
         if self.canisters.contains_key(&canister_id) {
