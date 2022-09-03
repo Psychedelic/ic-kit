@@ -1,6 +1,8 @@
 use ic_kit::prelude::*;
 use std::collections::HashSet;
 
+use ic_kit_example_counter::CounterCanister;
+
 #[derive(Default)]
 struct MultiCounter {
     canister_ids: HashSet<Principal>,
@@ -32,7 +34,6 @@ pub struct MultiCounterCanister;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use ic_kit_example_counter::CounterCanister;
 
     #[kit_test]
     async fn test_multi_canister(replica: Replica) {

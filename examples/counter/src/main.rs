@@ -1,3 +1,0 @@
-mod canister;
-
-fn main() {}

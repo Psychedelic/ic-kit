@@ -1,24 +1,33 @@
 use ic_kit::prelude::*;
 use ic_kit_example_counter::CounterCanister;
 
-use ic_kit::rt::Canister;
+#[cfg(target_family = "wasm")]
+fn deploy<C: KitCanister>(_id: Principal) {
+    unimplemented!()
+}
+
+#[cfg(not(target_family = "wasm"))]
+fn deploy<C: KitCanister>(id: Principal) {
+    use ic_kit::rt::Canister;
+
+    let canister: Canister = CounterCanister::build(id);
+    let canister = Box::leak(Box::new(canister));
+
+    CallBuilder::new(Principal::management_canister(), "ic_kit_install")
+        .with_arg(unsafe {
+            let ptr = canister as *mut Canister as *mut _ as usize;
+            ptr
+        })
+        .perform_one_way()
+        .expect("ic-kit: could not install dynamic canister.");
+}
 
 #[update]
 async fn deploy_counter() -> Principal {
     println!("Deploy counter!");
 
     let id = Principal::from_text("whq4n-xiaaa-aaaam-qaazq-cai").unwrap();
-    let canister: Canister = CounterCanister::build(id);
-    let canister = Box::leak(Box::new(canister));
-
-    let r = CallBuilder::new(Principal::management_canister(), "ic_kit_install")
-        .with_arg(unsafe {
-            let ptr = canister as *mut Canister as *mut _ as usize;
-            ptr
-        })
-        .perform_one_way();
-
-    println!("{:#?}", r);
+    deploy::<CounterCanister>(id);
 
     id
 }

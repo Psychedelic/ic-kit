@@ -7,8 +7,8 @@ edition = "2021"
 
 [dependencies]
 ic-kit = {path="../../ic-kit"}
-ic_kit_example_counter = {path="../counter"}
+ic_kit_example_counter = {path="../counter", default-features=false}
 
-[[bin]]
-name = "ic_kit_example_multi_counter"
-path = "src/main.rs"
+[features]
+default = ["kit-wasm-export"]
+kit-wasm-export = []
