@@ -238,7 +238,7 @@ pub fn export_service(input: DeriveInput, save_candid_path: Option<syn::LitStr>)
             }
         }
 
-        #[cfg(target_family = "wasm")]
+        #[cfg(feature="kit-wasm-export")]
         #[doc(hidden)]
         #[export_name = "canister_query __get_candid_interface_tmp_hack"]
         fn _ic_kit_canister_query___get_candid_interface_tmp_hack() {
