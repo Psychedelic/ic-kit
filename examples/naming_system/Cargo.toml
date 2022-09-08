@@ -9,7 +9,7 @@ edition = "2021"
 ic-kit = {path="../../ic-kit"}
 
 [features]
-kit-wasm-export = []
+kit-lib = []
 
 [lib]
 crate-type = ["cdylib", "lib"]

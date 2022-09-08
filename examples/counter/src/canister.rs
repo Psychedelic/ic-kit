@@ -37,6 +37,7 @@ pub fn get_counter(counter: &Counter) -> u64 {
 
 #[derive(KitCanister)]
 #[candid_path("candid.did")]
+#[wasm_path("../../target/wasm32-unknown-unknown/ic_kit_example_counter.wasm")]
 pub struct CounterCanister;
 
 #[cfg(test)]

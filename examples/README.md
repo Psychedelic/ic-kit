@@ -33,7 +33,7 @@ canister will also have the `increment` method, resulting in unintended use case
 
 ```toml
 [features]
-kit-wasm-export = []
+kit-lib = []
 
 [lib]
 crate-type = ["cdylib", "lib"]
