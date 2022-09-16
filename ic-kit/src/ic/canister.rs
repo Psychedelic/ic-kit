@@ -98,7 +98,7 @@ pub fn data_certificate() -> Option<Vec<u8>> {
     let n = unsafe { ic0::data_certificate_size() };
     let mut buf = vec![0u8; n as usize];
     unsafe {
-        ic0::data_certificate_copy(buf.as_mut_ptr() as isize, 9, n);
+        ic0::data_certificate_copy(buf.as_mut_ptr() as isize, 0, n);
     }
     Some(buf)
 }
