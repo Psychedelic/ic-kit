@@ -202,7 +202,7 @@ impl Canister {
 
     pub async fn process_message(
         &mut self,
-        message: Message,
+        message: CanisterMessage,
         reply_sender: Option<oneshot::Sender<CallReply>>,
     ) -> Vec<CanisterCall> {
         // Force reset the state.
@@ -213,7 +213,7 @@ impl Canister {
 
         // Assign the request_id for this message.
         let (request_id, env, task) = match message {
-            Message::CustomTask {
+            CanisterMessage::CustomTask {
                 request_id,
                 env,
                 task,
@@ -230,7 +230,7 @@ impl Canister {
 
                 (request_id, env, Some(task))
             }
-            Message::Request { request_id, env } => {
+            CanisterMessage::Request { request_id, env } => {
                 assert!(
                     reply_sender.is_some(),
                     "A request must provide a response channel."
@@ -257,7 +257,7 @@ impl Canister {
 
                 (request_id, env, task)
             }
-            Message::Reply { reply_to, env } => {
+            CanisterMessage::Reply { reply_to, env } => {
                 let callbacks = self.outgoing_calls.remove(&reply_to).expect(
                     "ic-kit-runtime: No outgoing message with the given id on this canister.",
                 );

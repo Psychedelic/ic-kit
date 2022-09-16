@@ -8,6 +8,8 @@ edition = "2021"
 [dependencies]
 ic-kit = {path="../../ic-kit"}
 
-[[bin]]
-name = "ic_kit_example_counter"
-path = "src/main.rs"
+[features]
+kit-lib = []
+
+[lib]
+crate-type = ["cdylib", "lib"]

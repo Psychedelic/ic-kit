@@ -4,7 +4,7 @@ use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, ToTokens};
 use std::collections::BTreeMap;
 use std::sync::Mutex;
-use syn::{DeriveInput, Error};
+use syn::Error;
 
 struct Method {
     hidden: bool,
@@ -86,7 +86,17 @@ pub(crate) fn declare(
     Ok(())
 }
 
-pub fn export_service(input: DeriveInput, save_candid_path: Option<syn::LitStr>) -> TokenStream {
+pub struct ExportServiceConfig {
+    pub name: Ident,
+    pub save_candid_path: Option<syn::LitStr>,
+    pub wasm_path: Option<syn::LitStr>,
+}
+
+pub fn export_service(config: ExportServiceConfig) -> TokenStream {
+    let name = config.name;
+    let save_candid_path = config.save_candid_path;
+    let wasm_path = config.wasm_path;
+
     let methods = {
         let mut map = METHODS.lock().unwrap();
         std::mem::replace(&mut *map, BTreeMap::new())
@@ -180,8 +190,6 @@ pub fn export_service(input: DeriveInput, save_candid_path: Option<syn::LitStr>)
         quote! { let actor = Some(ty); }
     };
 
-    let name = input.ident;
-
     let save_candid = if let Some(path) = save_candid_path {
         quote! {
             #[cfg(test)]
@@ -193,7 +201,7 @@ pub fn export_service(input: DeriveInput, save_candid_path: Option<syn::LitStr>)
                 use std::path::PathBuf;
 
                 let candid = #name::candid();
-                let mut path = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap());
+                let mut path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
                 path.push(#path);
                 let dir = path.parent().unwrap();
 
@@ -220,6 +228,25 @@ pub fn export_service(input: DeriveInput, save_candid_path: Option<syn::LitStr>)
         quote! {}
     };
 
+    let dynamic_canister = if let Some(path) = wasm_path {
+        quote! {
+            #[cfg(feature="kit-lib")]
+            impl ic_kit::KitDynamicCanister for #name {
+                #[cfg(not(target_family = "wasm"))]
+                fn get_canister_wasm() -> &'static [u8] {
+                    panic!("WASM is not available during test.")
+                }
+
+                #[cfg(target_family = "wasm")]
+                fn get_canister_wasm() -> &'static [u8] {
+                    include_bytes!(concat!(env!("CARGO_MANIFEST_DIR"), "/", #path))
+                }
+            }
+        }
+    } else {
+        quote! {}
+    };
+
     quote! {
         impl ic_kit::KitCanister for #name {
             #[cfg(not(target_family = "wasm"))]
@@ -238,7 +265,9 @@ pub fn export_service(input: DeriveInput, save_candid_path: Option<syn::LitStr>)
             }
         }
 
-        #[cfg(target_family = "wasm")]
+        #dynamic_canister
+
+        #[cfg(not(feature="kit-lib"))]
         #[doc(hidden)]
         #[export_name = "canister_query __get_candid_interface_tmp_hack"]
         fn _ic_kit_canister_query___get_candid_interface_tmp_hack() {
