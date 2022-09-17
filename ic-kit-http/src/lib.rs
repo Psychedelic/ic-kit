@@ -53,8 +53,8 @@ impl HttpResponse {
     }
 
     #[inline(always)]
-    pub fn with_body(mut self, body: Vec<u8>) -> Self {
-        self.body = body;
+    pub fn with_body<T: Into<Vec<u8>>>(mut self, body: T) -> Self {
+        self.body = body.into();
         self
     }
 

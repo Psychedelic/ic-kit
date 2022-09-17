@@ -3,20 +3,39 @@ use std::collections::HashMap;
 
 pub type Data = HashMap<String, Vec<u8>>;
 
-const INDEX_HTML: &str = r#"
+use serde::Serialize;
+
+use std::error::Error;
+use tinytemplate::TinyTemplate;
+
+#[derive(Serialize)]
+struct IndexContext {
+    manpage: String,
+}
+
+#[derive(Serialize)]
+struct ManpageContext {
+    canister_id: String,
+}
+
+static INDEX_HTML: &'static str = r#"
 <!DOCTYPE html>
 <html>
     <head>
-        <meta charset="utf-8">
         <title>IC Pastebin</title>
+        <style>
+            body \{
+                background: #1e1e1e;
+                color: #d4d4d4;
+            \}
+        </style>
     </head>
     <body>
-        <h1>IC Pastebin</h1>
-        <form action="/paste" method="POST">
-            <textarea name="paste" rows="10" cols="80"></textarea>
-            <br>
-            <input type="submit" value="Submit">
-        </form>
+        <pre>
+            <code>
+{manpage}
+            </code>
+        </pre>
     </body>
 </html>
 "#;
@@ -38,20 +57,35 @@ DESCRIPTION
 
 USAGE
 
-        curl -T file.txt https://rrkah-fqaaa-aaaaa-aaaaq-cai.raw.ic0.app
-        curl https://rrkah-fqaaa-aaaaa-aaaaq-cai.raw.ic0.app/file.txt
-"#;
+        curl -T file.txt https://{canister_id}.raw.ic0.app
+        curl https://{canister_id}.raw.ic0.app/file.txt"#;
 
 /// Index handler
 #[get(route = "/")]
 fn index_handler(r: HttpRequest, _: Params) -> HttpResponse {
+    let mut tt = TinyTemplate::new();
+
+    tt.add_template("manpage", INDEX_MANPAGE).unwrap();
+    let manpage = tt
+        .render(
+            "manpage",
+            &ManpageContext {
+                canister_id: ic::id().to_text(),
+            },
+        )
+        .unwrap();
+
+    // Just return the manpage if client is a terminal (curl or wget)
     if let Some(ua) = r.header("User-Agent") {
-        if ua.contains("curl") {
-            return HttpResponse::ok().with_body(INDEX_MANPAGE.into());
+        if ua.starts_with("curl") || ua.starts_with("wget") {
+            return HttpResponse::ok().with_body(manpage);
         }
     }
 
-    HttpResponse::ok().with_body(INDEX_HTML.into())
+    tt.add_template("html", INDEX_HTML).unwrap();
+    let html = tt.render("html", &IndexContext { manpage }).unwrap();
+
+    HttpResponse::ok().with_body(html)
 }
 
 /// Get paste handler
@@ -60,7 +94,7 @@ fn get_file(_: HttpRequest, p: Params) -> HttpResponse {
     let file = p.get("file").unwrap();
     ic::with(|data: &Data| match data.get(file) {
         Some(content) => HttpResponse::ok().with_body(content.clone()),
-        None => HttpResponse::new(404).with_body(format!("404: file not found `{}`", file).into()),
+        None => HttpResponse::new(404).with_body(format!("file not found `{}`", file)),
     })
 }
 
@@ -74,7 +108,7 @@ fn put_file(req: HttpRequest, p: Params) -> HttpResponse {
         d.insert(filename.to_string(), req.body);
     });
 
-    HttpResponse::ok().with_body(res.into())
+    HttpResponse::ok().with_body(res)
 }
 
 #[derive(KitCanister)]
