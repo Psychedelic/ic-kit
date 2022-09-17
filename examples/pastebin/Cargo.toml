@@ -1,15 +1,13 @@
 [package]
-name = "ic_kit_example_counter"
+name = "ic_kit_example_pastebin"
 version = "0.1.0"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-# With the `http` feature enabled, and no configured routes, the canister will provide status info at the index path.
 ic-kit = {path="../../ic-kit", features = ["http"]}
 
-
 [[bin]]
-name = "ic_kit_example_counter"
+name = "ic_kit_example_pastebin"
 path = "src/main.rs"

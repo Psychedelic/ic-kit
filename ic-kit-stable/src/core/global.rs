@@ -1,7 +1,6 @@
 use crate::core::allocator::{BlockAddress, BlockSize, StableAllocator};
 use crate::core::lru::LruCache;
 use ic_kit::stable::StableMemoryError;
-use std::borrow::BorrowMut;
 use std::cell::RefCell;
 
 thread_local! {

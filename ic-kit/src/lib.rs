@@ -25,6 +25,9 @@ pub use ic_kit_macros::KitCanister;
 #[cfg(not(target_family = "wasm"))]
 pub use ic_kit_runtime as rt;
 
+#[cfg(feature = "http")]
+pub use ic_kit_http as http;
+
 /// The famous prelude module which re exports the most useful methods.
 pub mod prelude {
     pub use super::canister::KitCanister;
@@ -37,6 +40,9 @@ pub mod prelude {
     pub use serde::{Deserialize, Serialize};
 
     pub use ic_kit_macros::*;
+
+    #[cfg(feature = "http")]
+    pub use ic_kit_http::*;
 
     #[cfg(not(target_family = "wasm"))]
     pub use ic_kit_runtime as rt;

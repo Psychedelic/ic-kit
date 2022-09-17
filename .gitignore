@@ -8,3 +8,4 @@
 #/target
 Cargo.lock
 .dfx
+*.old*

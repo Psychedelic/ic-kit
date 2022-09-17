@@ -6,6 +6,7 @@ members = [
     "examples/fib",
     "examples/multi_counter",
     "examples/naming_system",
+    "examples/pastebin",
     "ic-kit",
     "ic-kit-certified",
     "ic-kit-macros",
@@ -13,6 +14,7 @@ members = [
     "ic-kit-runtime",
     "ic-kit-stable",
     "ic-kit-sys",
+    "ic-kit-http",
 ]
 
 [profile.canister-release]

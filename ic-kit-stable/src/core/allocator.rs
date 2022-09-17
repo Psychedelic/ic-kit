@@ -1,6 +1,6 @@
 use crate::core::checksum::CheckedU40;
 use crate::core::hole::HoleList;
-use crate::core::memory::{DefaultMemory, IcMemory, Memory};
+use crate::core::memory::{DefaultMemory, Memory};
 use crate::core::utils::read_struct;
 use ic_kit::stable::StableMemoryError;
 

@@ -220,6 +220,15 @@ pub fn export_service(input: DeriveInput, save_candid_path: Option<syn::LitStr>)
         quote! {}
     };
 
+    let http_request: TokenStream;
+
+    http_request = match () {
+        #[cfg(not(feature = "http"))]
+        () => quote! {},
+        #[cfg(feature = "http")]
+        () => crate::http::gen_http_request_code(),
+    };
+
     quote! {
         impl ic_kit::KitCanister for #name {
             #[cfg(not(target_family = "wasm"))]
@@ -249,6 +258,8 @@ pub fn export_service(input: DeriveInput, save_candid_path: Option<syn::LitStr>)
         }
 
         #save_candid
+
+        #http_request
     }
 }
 

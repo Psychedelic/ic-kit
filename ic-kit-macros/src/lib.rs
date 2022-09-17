@@ -1,11 +1,14 @@
-mod entry;
-mod export_service;
-mod test;
-
 use entry::{gen_entry_point_code, EntryPoint};
 use proc_macro::TokenStream;
 use syn::parse_macro_input;
 use test::gen_test_code;
+
+mod entry;
+mod export_service;
+mod test;
+
+#[cfg(feature = "http")]
+mod http;
 
 fn process_entry_point(
     entry_point: EntryPoint,
@@ -91,4 +94,44 @@ fn get_save_candid_path(input: &syn::DeriveInput) -> syn::Result<Option<syn::Lit
         }
         None => Ok(None),
     }
+}
+
+/// Export a function as a HTTP GET handler.
+#[cfg(feature = "http")]
+#[proc_macro_attribute]
+pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
+    http::gen_handler_code("GET", attr.into(), item.into())
+        .unwrap_or_else(|error| error.to_compile_error())
+        .into()
+}
+
+/// Export a function as a HTTP POST handler.
+#[cfg(feature = "http")]
+#[proc_macro_attribute]
+pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
+    http::gen_handler_code("POST", attr.into(), item.into())
+        .unwrap_or_else(|error| error.to_compile_error())
+        .into()
+}
+
+/// Export a function as a HTTP PUT handler.
+#[cfg(feature = "http")]
+#[proc_macro_attribute]
+pub fn put(_attr: TokenStream, _item: TokenStream) -> TokenStream {
+    // http::gen_handler_code(http::HttpMethod::PUT, attr.into(), item.into())
+    //     .unwrap_or_else(|error| error.to_compile_error())
+    //     .into()
+
+    todo!()
+}
+
+/// Export a function as a HTTP DELETE handler.
+#[cfg(feature = "http")]
+#[proc_macro_attribute]
+pub fn delete(_attr: TokenStream, _item: TokenStream) -> TokenStream {
+    // http::gen_handler_code(http::HttpMethod::DELETE, attr.into(), item.into())
+    //     .unwrap_or_else(|error| error.to_compile_error())
+    //     .into()
+
+    todo!()
 }
