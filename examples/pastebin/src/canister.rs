@@ -1,6 +1,7 @@
+use ic_kit::prelude::*;
 use std::collections::HashMap;
 
-use ic_kit::prelude::*;
+pub type Data = HashMap<String, Vec<u8>>;
 
 const INDEX_HTML: &str = r#"
 <!DOCTYPE html>
@@ -34,32 +35,41 @@ fn index_handler(_: HttpRequest, _: Params) -> HttpResponse {
 #[get(route = "/:file")]
 fn get_file(_: HttpRequest, p: Params) -> HttpResponse {
     let file = p.get("file").unwrap();
+    ic::with(|data: &Data| match data.get(file) {
+        Some(content) => HttpResponse {
+            status_code: 200,
+            headers: vec![],
+            body: content.clone(),
+            streaming_strategy: None,
+            upgrade: false,
+        },
+        None => HttpResponse {
+            status_code: 404,
+            headers: vec![],
+            body: format!("404: file not found `{}`", file).into(),
+            streaming_strategy: None,
+            upgrade: false,
+        },
+    })
+}
 
-    let res = format!("reading file: {}", file);
+#[put(route = "/:file", upgrade = true)]
+fn put_file(req: HttpRequest, p: Params) -> HttpResponse {
+    let filename = p.get("file").unwrap();
+    let res = format!("recieved file: {} ({} bytes)", filename, req.body.len(),);
+
+    ic::with_mut(|d: &mut Data| {
+        d.insert(filename.to_string(), req.body);
+    });
 
     HttpResponse {
         status_code: 200,
         headers: vec![],
-        body: res.into(),
+        body: res.into_bytes(),
         streaming_strategy: None,
         upgrade: false,
     }
 }
-
-// #[put(route = "/:file")]
-// fn put_file(req: HttpRequest, p: Params) -> HttpResponse {
-//     let file = p.get("file").unwrap();
-
-//     let res = format!("recieved file: {} ({} bytes)", file, req.body.len());
-
-//     HttpResponse {
-//         status_code: 200,
-//         headers: vec![],
-//         body: res.into_bytes(),
-//         streaming_strategy: None,
-//         upgrade: false,
-//     }
-// }
 
 #[derive(KitCanister)]
 #[candid_path("candid.did")]

@@ -117,21 +117,44 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// Export a function as a HTTP PUT handler.
 #[cfg(feature = "http")]
 #[proc_macro_attribute]
-pub fn put(_attr: TokenStream, _item: TokenStream) -> TokenStream {
-    // http::gen_handler_code(http::HttpMethod::PUT, attr.into(), item.into())
-    //     .unwrap_or_else(|error| error.to_compile_error())
-    //     .into()
-
-    todo!()
+pub fn put(attr: TokenStream, item: TokenStream) -> TokenStream {
+    http::gen_handler_code("PUT", attr.into(), item.into())
+        .unwrap_or_else(|error| error.to_compile_error())
+        .into()
 }
 
 /// Export a function as a HTTP DELETE handler.
 #[cfg(feature = "http")]
 #[proc_macro_attribute]
-pub fn delete(_attr: TokenStream, _item: TokenStream) -> TokenStream {
-    // http::gen_handler_code(http::HttpMethod::DELETE, attr.into(), item.into())
-    //     .unwrap_or_else(|error| error.to_compile_error())
-    //     .into()
+pub fn delete(attr: TokenStream, item: TokenStream) -> TokenStream {
+    http::gen_handler_code("DELETE", attr.into(), item.into())
+        .unwrap_or_else(|error| error.to_compile_error())
+        .into()
+}
 
-    todo!()
+/// Export a function as a HTTP PATCH handler.
+#[cfg(feature = "http")]
+#[proc_macro_attribute]
+pub fn patch(attr: TokenStream, item: TokenStream) -> TokenStream {
+    http::gen_handler_code("PATCH", attr.into(), item.into())
+        .unwrap_or_else(|error| error.to_compile_error())
+        .into()
+}
+
+/// Export a function as a HTTP OPTIONS handler.
+#[cfg(feature = "http")]
+#[proc_macro_attribute]
+pub fn options(attr: TokenStream, item: TokenStream) -> TokenStream {
+    http::gen_handler_code("OPTIONS", attr.into(), item.into())
+        .unwrap_or_else(|error| error.to_compile_error())
+        .into()
+}
+
+/// Export a function as a HTTP HEAD handler.
+#[cfg(feature = "http")]
+#[proc_macro_attribute]
+pub fn head(attr: TokenStream, item: TokenStream) -> TokenStream {
+    http::gen_handler_code("HEAD", attr.into(), item.into())
+        .unwrap_or_else(|error| error.to_compile_error())
+        .into()
 }

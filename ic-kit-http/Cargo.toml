@@ -20,3 +20,4 @@ ic-kit-macros = { path = "../ic-kit-macros", features = ["http"] }
 candid = "0.7"
 serde = "1.0"
 matchit = "0.6.0"
+lazy_static = "1.4"
