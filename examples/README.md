@@ -6,3 +6,12 @@ you can also use to develop canisters.
 
 Simple State Manipulation:
 - Counter
+
+Inter Canister Communication:
+- Multi Counter
+
+Child Canister Creation:
+- Factory Counter
+
+Inbound HTTP Server:
+- Pastebin
