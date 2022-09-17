@@ -21,38 +21,50 @@ const INDEX_HTML: &str = r#"
 </html>
 "#;
 
+const INDEX_MANPAGE: &str = r#"
+IC PASTEBIN(1)                      IC PASTEBIN                       IC PASTEBIN(1)
+
+NAME
+
+        ic-pastebin - HTTP pastebin canister for the Internet Computer 
+
+DESCRIPTION
+
+        The ic-pastebin canister is a simple pastebin canister that allows users to
+        upload text and get a URL to share it with others.
+
+        The canister is written in Rust and uses the ic-kit library to provide
+        access to the Internet Computer.
+
+USAGE
+
+        curl -T file.txt https://rrkah-fqaaa-aaaaa-aaaaq-cai.raw.ic0.app
+        curl https://rrkah-fqaaa-aaaaa-aaaaq-cai.raw.ic0.app/file.txt
+"#;
+
+/// Index handler
 #[get(route = "/")]
-fn index_handler(_: HttpRequest, _: Params) -> HttpResponse {
-    HttpResponse {
-        status_code: 200,
-        headers: vec![],
-        body: INDEX_HTML.into(),
-        streaming_strategy: None,
-        upgrade: false,
+fn index_handler(r: HttpRequest, _: Params) -> HttpResponse {
+    if let Some(ua) = r.header("User-Agent") {
+        if ua.contains("curl") {
+            return HttpResponse::ok().with_body(INDEX_MANPAGE.into());
+        }
     }
+
+    HttpResponse::ok().with_body(INDEX_HTML.into())
 }
 
+/// Get paste handler
 #[get(route = "/:file")]
 fn get_file(_: HttpRequest, p: Params) -> HttpResponse {
     let file = p.get("file").unwrap();
     ic::with(|data: &Data| match data.get(file) {
-        Some(content) => HttpResponse {
-            status_code: 200,
-            headers: vec![],
-            body: content.clone(),
-            streaming_strategy: None,
-            upgrade: false,
-        },
-        None => HttpResponse {
-            status_code: 404,
-            headers: vec![],
-            body: format!("404: file not found `{}`", file).into(),
-            streaming_strategy: None,
-            upgrade: false,
-        },
+        Some(content) => HttpResponse::ok().with_body(content.clone()),
+        None => HttpResponse::new(404).with_body(format!("404: file not found `{}`", file).into()),
     })
 }
 
+/// Upload paste handler
 #[put(route = "/:file", upgrade = true)]
 fn put_file(req: HttpRequest, p: Params) -> HttpResponse {
     let filename = p.get("file").unwrap();
@@ -62,13 +74,7 @@ fn put_file(req: HttpRequest, p: Params) -> HttpResponse {
         d.insert(filename.to_string(), req.body);
     });
 
-    HttpResponse {
-        status_code: 200,
-        headers: vec![],
-        body: res.into_bytes(),
-        streaming_strategy: None,
-        upgrade: false,
-    }
+    HttpResponse::ok().with_body(res.into())
 }
 
 #[derive(KitCanister)]
