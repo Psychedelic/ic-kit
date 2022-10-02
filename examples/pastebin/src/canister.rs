@@ -1,24 +1,23 @@
-use ic_kit::prelude::*;
 use std::collections::HashMap;
+
+use serde::Serialize;
+use tinytemplate::TinyTemplate;
+
+use ic_kit::prelude::*;
 
 pub type Data = HashMap<String, Vec<u8>>;
 
-use serde::Serialize;
-
-use std::error::Error;
-use tinytemplate::TinyTemplate;
-
 #[derive(Serialize)]
-struct IndexContext {
+struct HtmlContext {
     manpage: String,
 }
 
 #[derive(Serialize)]
 struct ManpageContext {
-    canister_id: String,
+    url: String,
 }
 
-static INDEX_HTML: &'static str = r#"
+static HTML_TEMPLATE: &str = r#"
 <!DOCTYPE html>
 <html>
     <head>
@@ -40,7 +39,7 @@ static INDEX_HTML: &'static str = r#"
 </html>
 "#;
 
-const INDEX_MANPAGE: &str = r#"
+static MANPAGE_TEMPLATE: &str = r#"
 IC PASTEBIN(1)                      IC PASTEBIN                       IC PASTEBIN(1)
 
 NAME
@@ -57,23 +56,23 @@ DESCRIPTION
 
 USAGE
 
-        curl -T file.txt https://{canister_id}.raw.ic0.app
-        curl https://{canister_id}.raw.ic0.app/file.txt"#;
+        curl -T file.txt {url}
+        curl {url}/file.txt
+"#;
 
 /// Index handler
 #[get(route = "/")]
 fn index_handler(r: HttpRequest, _: Params) -> HttpResponse {
+    ic::print(format!("{:?}", r));
+    let url = match r.header("host") {
+        Some(host) => format!("http://{}", host),
+        None => format!("https://{}.raw.ic0.app", id()),
+    };
+
     let mut tt = TinyTemplate::new();
 
-    tt.add_template("manpage", INDEX_MANPAGE).unwrap();
-    let manpage = tt
-        .render(
-            "manpage",
-            &ManpageContext {
-                canister_id: ic::id().to_text(),
-            },
-        )
-        .unwrap();
+    tt.add_template("manpage", MANPAGE_TEMPLATE).unwrap();
+    let manpage = tt.render("manpage", &ManpageContext { url }).unwrap();
 
     // Just return the manpage if client is a terminal (curl or wget)
     if let Some(ua) = r.header("User-Agent") {
@@ -82,8 +81,8 @@ fn index_handler(r: HttpRequest, _: Params) -> HttpResponse {
         }
     }
 
-    tt.add_template("html", INDEX_HTML).unwrap();
-    let html = tt.render("html", &IndexContext { manpage }).unwrap();
+    tt.add_template("html", HTML_TEMPLATE).unwrap();
+    let html = tt.render("html", &HtmlContext { manpage }).unwrap();
 
     HttpResponse::ok().with_body(html)
 }
@@ -92,9 +91,9 @@ fn index_handler(r: HttpRequest, _: Params) -> HttpResponse {
 #[get(route = "/:file")]
 fn get_file(_: HttpRequest, p: Params) -> HttpResponse {
     let file = p.get("file").unwrap();
-    ic::with(|data: &Data| match data.get(file) {
+    with(|data: &Data| match data.get(file) {
         Some(content) => HttpResponse::ok().with_body(content.clone()),
-        None => HttpResponse::new(404).with_body(format!("file not found `{}`", file)),
+        None => HttpResponse::new(404).with_body(format!("file not found `{}`\n", file)),
     })
 }
 
@@ -102,9 +101,11 @@ fn get_file(_: HttpRequest, p: Params) -> HttpResponse {
 #[put(route = "/:file", upgrade = true)]
 fn put_file(req: HttpRequest, p: Params) -> HttpResponse {
     let filename = p.get("file").unwrap();
-    let res = format!("recieved file: {} ({} bytes)", filename, req.body.len(),);
+    let url = req.header("host").unwrap_or("unknown");
 
-    ic::with_mut(|d: &mut Data| {
+    let res = format!("{}.{}/{}", id().to_text(), "localhost:8000", filename);
+
+    with_mut(|d: &mut Data| {
         d.insert(filename.to_string(), req.body);
     });
 
