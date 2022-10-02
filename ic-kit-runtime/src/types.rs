@@ -1,10 +1,10 @@
-use candid::utils::ArgumentEncoder;
-use candid::{encode_args, encode_one, CandidType};
-use ic_kit_sys::types::{RejectionCode, CANDID_EMPTY_ARG};
-use ic_types::Principal;
 use std::panic::{RefUnwindSafe, UnwindSafe};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{SystemTime, UNIX_EPOCH};
+
+use candid::{encode_args, encode_one, utils::ArgumentEncoder, CandidType, Principal};
+
+use ic_kit_sys::types::{RejectionCode, CANDID_EMPTY_ARG};
 
 static REQUEST_ID: AtomicU64 = AtomicU64::new(0);
 

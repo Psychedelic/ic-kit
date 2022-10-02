@@ -17,7 +17,7 @@ include = ["src", "Cargo.toml", "README.md"]
 
 [dependencies]
 ic-kit-macros = { path = "../ic-kit-macros", features = ["http"] }
-candid = "0.7"
+candid = "0.8"
 serde = "1.0"
 matchit = "0.6.0"
 lazy_static = "1.4"

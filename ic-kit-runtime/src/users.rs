@@ -1,6 +1,6 @@
 //! A set of mock principal ids.
 
-use ic_types::Principal;
+use candid::Principal;
 use lazy_static::lazy_static;
 
 lazy_static! {

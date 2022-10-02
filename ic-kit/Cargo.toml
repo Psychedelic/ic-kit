@@ -1,6 +1,6 @@
 [package]
 name = "ic-kit"
-version = "0.5.0-alpha.4"
+version = "0.5.0-alpha.5"
 description = "Testable Canister Developer Kit for the Internet Computer."
 authors = ["Parsa Ghadimi <i@parsa.ooo>", "Ossian Mapes <oz@fleek.co>"]
 edition = "2018"
@@ -14,14 +14,14 @@ keywords = ["internet-computer", "canister", "fleek", "psychedelic"]
 include = ["src", "Cargo.toml", "README.md"]
 
 [dependencies]
-ic-kit-sys = {path="../ic-kit-sys", version="0.1.3"}
-ic-kit-macros = {path="../ic-kit-macros", version="0.1.1-alpha.0"}
-ic-kit-http = {path="../ic-kit-http", version="0.1.0-alpha.0", optional=true}
-candid="0.7"
+ic-kit-sys = { path = "../ic-kit-sys", version = "0.1.3" }
+ic-kit-macros = { path = "../ic-kit-macros", version = "0.1.1-alpha.0" }
+ic-kit-http = { path = "../ic-kit-http", version = "0.1.0-alpha.0", optional = true }
+candid = "0.8"
 serde = "1.0"
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-ic-kit-runtime = {path="../ic-kit-runtime", version="0.1.0-alpha.1"}
+ic-kit-runtime = { path = "../ic-kit-runtime", version = "0.1.0-alpha.2" }
 
 [features]
 default = []

@@ -1,20 +1,23 @@
-use crate::call::CallReply;
-use crate::stable::{HeapStableMemory, StableMemoryBackend};
-use crate::types::*;
-use futures::executor::block_on;
-use ic_kit_sys::ic0;
-use ic_kit_sys::ic0::runtime;
-use ic_kit_sys::ic0::runtime::Ic0CallHandlerProxy;
-use ic_kit_sys::types::RejectionCode;
-use ic_types::Principal;
 use std::any::Any;
 use std::collections::{HashMap, HashSet};
 use std::panic::catch_unwind;
 use std::thread::JoinHandle;
+
+use candid::Principal;
+use futures::executor::block_on;
 use thread_local_panic_hook::set_hook;
 use tokio::select;
 use tokio::sync::mpsc::{self, Receiver, Sender};
 use tokio::sync::oneshot;
+
+use ic_kit_sys::ic0;
+use ic_kit_sys::ic0::runtime;
+use ic_kit_sys::ic0::runtime::Ic0CallHandlerProxy;
+use ic_kit_sys::types::RejectionCode;
+
+use crate::call::CallReply;
+use crate::stable::{HeapStableMemory, StableMemoryBackend};
+use crate::types::*;
 
 const MAX_CYCLES_PER_RESPONSE: u128 = 12;
 
@@ -585,7 +588,7 @@ impl Ic0CallHandlerProxy for Canister {
                 return Err(format!(
                     "msg_reply_data_append can not be called from '{}'",
                     self.env.get_entry_point_name()
-                ))
+                ));
             }
         };
 
@@ -616,7 +619,7 @@ impl Ic0CallHandlerProxy for Canister {
                 return Err(format!(
                     "msg_reply can not be called from '{}'",
                     self.env.get_entry_point_name()
-                ))
+                ));
             }
         };
 
@@ -654,7 +657,7 @@ impl Ic0CallHandlerProxy for Canister {
                 return Err(format!(
                     "msg_reject can not be called from '{}'",
                     self.env.get_entry_point_name()
-                ))
+                ));
             }
         };
 
@@ -755,7 +758,7 @@ impl Ic0CallHandlerProxy for Canister {
                 return Err(format!(
                     "msg_cycles_accept can not be called from '{}'",
                     self.env.get_entry_point_name()
-                ))
+                ));
             }
         };
 
@@ -785,7 +788,7 @@ impl Ic0CallHandlerProxy for Canister {
                 return Err(format!(
                     "msg_cycles_accept128 can not be called from '{}'",
                     self.env.get_entry_point_name()
-                ))
+                ));
             }
         };
 
@@ -846,7 +849,7 @@ impl Ic0CallHandlerProxy for Canister {
                 return Err(format!(
                     "msg_method_name_size can not be called from '{}'",
                     self.env.get_entry_point_name()
-                ))
+                ));
             }
         };
 
@@ -870,7 +873,7 @@ impl Ic0CallHandlerProxy for Canister {
                 return Err(format!(
                     "msg_method_name_copy can not be called from '{}'",
                     self.env.get_entry_point_name()
-                ))
+                ));
             }
         };
 
@@ -904,7 +907,7 @@ impl Ic0CallHandlerProxy for Canister {
                 return Err(format!(
                     "call_new can not be called from '{}'",
                     self.env.get_entry_point_name()
-                ))
+                ));
             }
         }
 

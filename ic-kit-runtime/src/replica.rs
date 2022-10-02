@@ -18,7 +18,7 @@ use crate::canister::Canister;
 use crate::handle::CanisterHandle;
 use crate::types::*;
 use ic_kit_sys::types::RejectionCode;
-use ic_types::Principal;
+use candid::Principal;
 use std::collections::HashMap;
 use std::future::Future;
 use tokio::sync::{mpsc, oneshot};
