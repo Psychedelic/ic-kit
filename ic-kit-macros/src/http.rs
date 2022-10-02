@@ -1,12 +1,13 @@
+use std::sync::Mutex;
+
 use lazy_static::lazy_static;
 use proc_macro2::TokenStream;
 use quote::quote;
 use serde::Deserialize;
 use serde_tokenstream::from_tokenstream;
-use std::sync::Mutex;
-use syn::{spanned::Spanned, Error};
+use syn::{Error, spanned::Spanned};
 
-struct Method {
+struct Handler {
     name: String,
     route: String,
     method: String,
@@ -14,7 +15,7 @@ struct Method {
 }
 
 lazy_static! {
-    static ref GETS: Mutex<Vec<Method>> = Mutex::new(Vec::new());
+    static ref HANDLERS: Mutex<Vec<Handler>> = Mutex::new(Vec::new());
 }
 
 #[derive(Deserialize)]
@@ -37,7 +38,7 @@ pub fn gen_handler_code(
         )
     })?;
 
-    GETS.lock().unwrap().push(Method {
+    HANDLERS.lock().unwrap().push(Handler {
         name: fun.sig.ident.to_string(),
         route: attrs.route,
         method: method.into(),
@@ -50,7 +51,7 @@ pub fn gen_handler_code(
 }
 
 pub fn gen_http_request_code() -> TokenStream {
-    let routes = GETS.lock().unwrap();
+    let routes = HANDLERS.lock().unwrap();
 
     let mut routes_insert = TokenStream::new();
     let mut upgradable = false;
@@ -70,10 +71,10 @@ pub fn gen_http_request_code() -> TokenStream {
                 }
             }
 
-            router.insert("GET", "/", (index, false));
+            router.insert("GET", "/*p", (index, false));
         };
     } else {
-        for Method {
+        for Handler {
             method,
             name,
             route,
