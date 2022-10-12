@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "e2e",
+    "examples/hello",
     "examples/counter",
     "examples/factory_counter",
     "examples/fib",
