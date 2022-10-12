@@ -1,10 +1,11 @@
+use candid::utils::{ArgumentDecoder, ArgumentEncoder};
+use candid::{decode_args, decode_one, encode_args, encode_one, CandidType, Principal};
+use serde::de::DeserializeOwned;
+
+use ic_kit_sys::types::{CallError, RejectionCode, CANDID_EMPTY_ARG};
+
 use crate::types::*;
 use crate::Replica;
-use candid::utils::{ArgumentDecoder, ArgumentEncoder};
-use candid::{decode_args, decode_one, encode_args, encode_one, CandidType};
-use ic_kit_sys::types::{CallError, RejectionCode, CANDID_EMPTY_ARG};
-use ic_types::Principal;
-use serde::de::DeserializeOwned;
 
 /// A CallBuilder for a replica.
 #[derive(Clone)]

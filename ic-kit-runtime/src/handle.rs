@@ -1,9 +1,11 @@
+use std::panic::{RefUnwindSafe, UnwindSafe};
+
+use candid::Principal;
+use tokio::sync::oneshot;
+
 use crate::call::{CallBuilder, CallReply};
 use crate::types::{Env, Message, RequestId};
 use crate::Replica;
-use ic_types::Principal;
-use std::panic::{RefUnwindSafe, UnwindSafe};
-use tokio::sync::oneshot;
 
 pub struct CanisterHandle<'a> {
     pub(crate) replica: &'a Replica,

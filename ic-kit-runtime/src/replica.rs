@@ -13,16 +13,19 @@
 //! This also allows the canister event loops to have accesses to the replica without any borrows by
 //! just sending their request to the same channel, causing the replica to process the messages.
 
+use std::collections::HashMap;
+use std::future::Future;
+use std::panic::{RefUnwindSafe, UnwindSafe};
+
+use candid::Principal;
+use tokio::sync::{mpsc, oneshot};
+
+use ic_kit_sys::types::RejectionCode;
+
 use crate::call::{CallBuilder, CallReply};
 use crate::canister::Canister;
 use crate::handle::CanisterHandle;
 use crate::types::*;
-use ic_kit_sys::types::RejectionCode;
-use ic_types::Principal;
-use std::collections::HashMap;
-use std::future::Future;
-use std::panic::{RefUnwindSafe, UnwindSafe};
-use tokio::sync::{mpsc, oneshot};
 
 /// A local replica that contains one or several canisters.
 pub struct Replica {

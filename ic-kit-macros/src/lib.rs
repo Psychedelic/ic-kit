@@ -1,11 +1,14 @@
-mod entry;
-mod export_service;
-mod test;
+use proc_macro::TokenStream;
+
+use syn::parse_macro_input;
 
 use entry::{gen_entry_point_code, EntryPoint};
-use proc_macro::TokenStream;
-use syn::parse_macro_input;
 use test::gen_test_code;
+
+mod entry;
+mod export_service;
+mod metadata;
+mod test;
 
 fn process_entry_point(
     entry_point: EntryPoint,
