@@ -31,6 +31,8 @@ See [the examples](./examples) directory.
 IC-Kit 0.5 is breaking drop-in replacement guarantee of the CDK, which allows us to go one step further in improving
 canister development experience.
 
+> Note: The kit includes a breaking change to the Principal type. The kit is upgraded to candid 0.8 and ic_types 0.6, where `Principal` lives directly in the candid crate. 
+
 ### Fully Simulated Replica
 
 Now we have a `#[kit_test]` macro which gives you access to a replica simulator that you can use for testing your
