@@ -1,5 +1,3 @@
-
-use entry::{gen_entry_point_code, EntryPoint};
 use proc_macro::TokenStream;
 
 use syn::parse_macro_input;
