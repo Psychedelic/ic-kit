@@ -20,7 +20,7 @@ cfg-if = "1.0.0"
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 ic-kit-sys = { path = "../ic-kit-sys", version = "0.1.3" }
-ic-types = "0.6.0"
+ic-types = "0.6"
 tokio = { version = "1.20", features = ["sync", "macros", "rt"] }
 thread-local-panic-hook = "0.1.0"
 lazy_static = "1.4"

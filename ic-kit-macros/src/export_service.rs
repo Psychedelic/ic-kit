@@ -1,10 +1,13 @@
-use crate::EntryPoint;
+use std::collections::BTreeMap;
+use std::sync::Mutex;
+
 use lazy_static::lazy_static;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, ToTokens};
-use std::collections::BTreeMap;
-use std::sync::Mutex;
 use syn::{DeriveInput, Error};
+
+use crate::metadata::generate_metadata;
+use crate::EntryPoint;
 
 struct Method {
     hidden: bool,
@@ -69,18 +72,16 @@ pub(crate) fn declare(
                 format!("Canister's '{}' method already defined.", entry_point),
             ));
         }
-    } else {
-        if METHODS
-            .lock()
-            .unwrap()
-            .insert(name.clone(), method)
-            .is_some()
-        {
-            return Err(Error::new(
-                rust_name.span(),
-                format!("Method '{}' is already defined.", name),
-            ));
-        }
+    } else if METHODS
+        .lock()
+        .unwrap()
+        .insert(name.clone(), method)
+        .is_some()
+    {
+        return Err(Error::new(
+            rust_name.span(),
+            format!("Method '{}' is already defined.", name),
+        ));
     };
 
     Ok(())
@@ -228,8 +229,12 @@ pub fn export_service(input: DeriveInput, save_candid_path: Option<syn::LitStr>)
         #[cfg(feature = "http")]
         () => crate::http::gen_http_request_code(),
     };
+    
+    let metadata = generate_metadata();
 
     quote! {
+        #metadata
+
         impl ic_kit::KitCanister for #name {
             #[cfg(not(target_family = "wasm"))]
             fn build(canister_id: ic_kit::Principal) -> ic_kit::rt::Canister {

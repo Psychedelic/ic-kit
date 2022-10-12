@@ -21,7 +21,15 @@ use ic_kit_sys::types::RejectionCode;
 use candid::Principal;
 use std::collections::HashMap;
 use std::future::Future;
+
 use tokio::sync::{mpsc, oneshot};
+
+use ic_kit_sys::types::RejectionCode;
+
+use crate::call::{CallBuilder, CallReply};
+use crate::canister::Canister;
+use crate::handle::CanisterHandle;
+use crate::types::*;
 
 /// A local replica that contains one or several canisters.
 pub struct Replica {
