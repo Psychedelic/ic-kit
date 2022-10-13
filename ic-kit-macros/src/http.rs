@@ -34,6 +34,7 @@ pub fn gen_handler_code(
     item: TokenStream,
 ) -> Result<TokenStream, Error> {
     let attrs = from_tokenstream::<Config>(&attr)?;
+    let upgrade = attrs.upgrade.unwrap_or(false);
     let fun = syn::parse2::<syn::ItemFn>(item.clone()).map_err(|e| {
         Error::new(
             item.span(),
@@ -43,20 +44,36 @@ pub fn gen_handler_code(
     let sig = fun.sig;
     let output = sig.output.clone();
     let ident = sig.ident.clone();
-    let name = sig.ident.to_string();
     let is_async = sig.asyncness.is_some();
     let stmts = fun.block.stmts;
 
     HANDLERS.lock().unwrap().push(Handler {
-        name,
+        name: sig.ident.to_string(),
         route: attrs.route,
         method: method.into(),
-        upgrade: attrs.upgrade.unwrap_or(false),
+        upgrade,
     });
 
     // Build the outer function's body.
     let args = di(collect_args(method, &sig)?, is_async)?;
     let (can_args, can_types): (Vec<_>, Vec<_>) = args.can_args.clone().into_iter().unzip();
+
+    if !upgrade && !args.mut_args.is_empty() {
+        // TODO: This is much better as a warning, but the feature is not yet stable.
+        // #![feature()]
+        /*sig.span().unwrap().warning(format!(
+            "HTTP mutable dependencies will rollback unless the call is in update mode. To make changes persist, specify `upgrade = true` in the #[{}] attribute.",
+            method.to_lowercase()
+        )).emit();*/
+
+        return Err(Error::new(
+            sig.span(),
+            format!(
+                "HTTP mutable dependencies will rollback unless the call is in update mode. To make changes persist, specify `upgrade = true` in the #[{}] attribute.",
+                method.to_lowercase()
+            ),
+        ));
+    }
 
     // Because DI doesn't work on an async method.
     let mut inner = TokenStream::new();
