@@ -39,7 +39,7 @@ pub mod prelude {
     pub use candid::{CandidType, Nat, Principal};
     pub use serde::{Deserialize, Serialize};
 
-    pub use ic_kit_macros::*;
+    pub use ic_kit_macros::{query, init, update, pre_upgrade, post_upgrade};
 
     #[cfg(feature = "http")]
     pub use ic_kit_http::*;

@@ -77,14 +77,14 @@ fn index_handler(r: HttpRequest, _: Params) -> HttpResponse {
     // Just return the manpage if client is a terminal (curl or wget)
     if let Some(ua) = r.header("User-Agent") {
         if ua.starts_with("curl") || ua.starts_with("wget") {
-            return HttpResponse::ok().with_body(manpage);
+            return HttpResponse::ok().body(manpage);
         }
     }
 
     tt.add_template("html", HTML_TEMPLATE).unwrap();
     let html = tt.render("html", &HtmlContext { manpage }).unwrap();
 
-    HttpResponse::ok().with_body(html)
+    HttpResponse::ok().body(html)
 }
 
 /// Get paste handler
@@ -92,8 +92,8 @@ fn index_handler(r: HttpRequest, _: Params) -> HttpResponse {
 fn get_file_handler(data: &Data, _: HttpRequest, p: Params) -> HttpResponse {
     let file = p.get("file").unwrap();
     match data.get(file) {
-        Some(content) => HttpResponse::ok().with_body(content.clone()),
-        None => HttpResponse::new(404).with_body(format!("file not found `{}`\n", file)),
+        Some(content) => HttpResponse::ok().body(content.clone()),
+        None => HttpResponse::new(404).body(format!("file not found `{}`\n", file)),
     }
 }
 
@@ -107,7 +107,7 @@ fn put_file_handler(data: &mut Data, req: HttpRequest, p: Params) -> HttpRespons
 
     data.insert(filename.to_string(), req.body);
 
-    HttpResponse::ok().with_body(res)
+    HttpResponse::ok().body(res)
 }
 
 #[derive(KitCanister)]

@@ -22,7 +22,7 @@ pub fn gen_test_code(_: TokenStream, item: TokenStream) -> Result<TokenStream, E
     if !is_async {
         return Err(Error::new(
             Span::call_site(),
-            format!("The #[kit_test] can only be used on top of an async function.",),
+            "The #[kit_test] can only be used on top of an async function.".to_string(),
         ));
     }
 

@@ -102,6 +102,26 @@ fn get_save_candid_path(input: &syn::DeriveInput) -> syn::Result<Option<syn::Lit
 }
 
 /// Export a function as a HTTP GET handler.
+///
+/// The function must have the signature
+/// > fn([HttpRequest](../ic_kit_http/struct.HttpRequest.html), [Params](../ic_kit_http/struct.Params.html)) -> [HttpResponse](../ic_kit_http/struct.HttpResponse.html)
+///
+/// HTTP macros will remove dependency injected reference args from the function signature, so you can use DI in your handlers.
+///
+/// # Example
+/// ```rs
+/// // set a route for GET / that has no params
+/// #[get(route = "/")]
+/// fn index_handler(r: HttpRequest, _: Params) -> HttpResponse {
+///     ic::print(format!("{:?}", r));
+///
+///     // grab a header
+///     let header = r.headers.get("host").unwrap();
+///
+///     // Build an Ok (200) response with a body containing the host header
+///     HttpResponse::ok().body(header)
+/// }
+/// ```
 #[cfg(feature = "http")]
 #[proc_macro_attribute]
 pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -111,6 +131,30 @@ pub fn get(attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 /// Export a function as a HTTP POST handler.
+///
+/// The function must have the signature
+/// > fn([HttpRequest](../ic_kit_http/struct.HttpRequest.html), [Params](../ic_kit_http/struct.Params.html)) -> [HttpResponse](../ic_kit_http/struct.HttpResponse.html)
+///
+/// HTTP macros will remove dependency injected reference args from the function signature, so you can use DI in your handlers.
+///
+/// # Example
+/// Store a value in the canister's memory, with the key being a path parameter.
+///
+/// ```rs
+/// pub type Data = HashMap<String, Vec<u8>>;
+///
+/// // set a route for POST /data/<key> that has a single path param, and upgrades to an update call
+/// #[post(route = "/set/:key", upgrade = true)]
+/// fn set_handler(r: HttpRequest, p: Params) -> HttpResponse {
+///    let key = p.get("key").unwrap();
+///    let value = r.body;
+///
+///    ic_kit::with_mut(|data: &mut Data| {
+///      data.insert(key, value);
+///    });
+///    
+///    HttpResponse::ok().body("stored value")
+/// }
 #[cfg(feature = "http")]
 #[proc_macro_attribute]
 pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -120,6 +164,30 @@ pub fn post(attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 /// Export a function as a HTTP PUT handler.
+///
+/// The function must have the signature
+/// > fn([HttpRequest](../ic_kit_http/struct.HttpRequest.html), [Params](../ic_kit_http/struct.Params.html)) -> [HttpResponse](../ic_kit_http/struct.HttpResponse.html)
+///
+/// HTTP macros will remove dependency injected reference args from the function signature, so you can use DI in your handlers.
+///
+/// # Example
+///
+/// ```rs
+/// pub type Data = HashMap<String, Vec<u8>>;
+///
+/// // set a route for PUT /<filename> that has a single path param, and upgrades to an update call
+/// #[put(route = ":filename", upgrade = true)]
+/// fn put_handler(data: &mut Data, r: HttpRequest, p: Params) -> HttpResponse {
+///    // get the filename param
+///    let file = p.get("filename").unwrap();
+///    let value = r.body;
+///    
+///    data.insert(file, value);
+///    
+///    // Build an Ok (200) response with a body
+///    HttpResponse::ok().body("stored file")
+/// }
+/// ```
 #[cfg(feature = "http")]
 #[proc_macro_attribute]
 pub fn put(attr: TokenStream, item: TokenStream) -> TokenStream {
@@ -129,6 +197,27 @@ pub fn put(attr: TokenStream, item: TokenStream) -> TokenStream {
 }
 
 /// Export a function as a HTTP DELETE handler.
+///
+/// The function must have the signature
+/// > fn([HttpRequest](../ic_kit_http/struct.HttpRequest.html), [Params](../ic_kit_http/struct.Params.html)) -> [HttpResponse](../ic_kit_http/struct.HttpResponse.html)
+///
+/// HTTP macros will remove dependency injected reference args from the function signature, so you can use DI in your handlers.
+///
+/// # Example
+///
+/// ```rs
+/// pub type Data = HashMap<String, Vec<u8>>;
+///
+/// // set a route for DELETE /<filename> that has a single path param, and upgrades to an update call
+/// #[delete(route = ":file", upgrade = true)]
+/// fn delete_handler(data: &mut Data, r: HttpRequest, p: Params) -> HttpResponse {
+///   let file = p.get("file").unwrap();
+///
+///   data.remove(file);
+///
+///   // Build an Ok (200) response with a body
+///   HttpResponse::ok().body("deleted file")
+/// }
 #[cfg(feature = "http")]
 #[proc_macro_attribute]
 pub fn delete(attr: TokenStream, item: TokenStream) -> TokenStream {
