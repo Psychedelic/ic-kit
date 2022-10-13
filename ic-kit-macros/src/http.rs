@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::sync::Mutex;
 
 use lazy_static::lazy_static;
@@ -5,7 +6,9 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use serde::Deserialize;
 use serde_tokenstream::from_tokenstream;
-use syn::{Error, spanned::Spanned};
+use syn::{spanned::Spanned, Error};
+
+use crate::di::{collect_args, di};
 
 struct Handler {
     name: String,
@@ -31,22 +34,42 @@ pub fn gen_handler_code(
     item: TokenStream,
 ) -> Result<TokenStream, Error> {
     let attrs = from_tokenstream::<Config>(&attr)?;
-    let fun: syn::ItemFn = syn::parse2::<syn::ItemFn>(item.clone()).map_err(|e| {
+    let fun = syn::parse2::<syn::ItemFn>(item.clone()).map_err(|e| {
         Error::new(
             item.span(),
             format!("#[{0}] must be above a function. \n{1}", method, e),
         )
     })?;
+    let sig = fun.sig;
+    let output = sig.output.clone();
+    let ident = sig.ident.clone();
+    let name = sig.ident.to_string();
+    let is_async = sig.asyncness.is_some();
+    let stmts = fun.block.stmts;
 
     HANDLERS.lock().unwrap().push(Handler {
-        name: fun.sig.ident.to_string(),
+        name,
         route: attrs.route,
         method: method.into(),
         upgrade: attrs.upgrade.unwrap_or(false),
     });
 
+    // Build the outer function's body.
+    let args = di(collect_args(method, &sig)?, is_async)?;
+    let (can_args, can_types): (Vec<_>, Vec<_>) = args.can_args.clone().into_iter().unzip();
+
+    // Because DI doesn't work on an async method.
+    let mut inner = TokenStream::new();
+    for stmt in stmts {
+        inner.extend(quote!(#stmt));
+    }
+
+    let result = crate::di::wrap(inner, args);
+
     Ok(quote! {
-        #item
+        fn #ident(#(#can_args: #can_types),*) #output {
+            #result
+        }
     })
 }
 
@@ -55,6 +78,7 @@ pub fn gen_http_request_code() -> TokenStream {
 
     let mut routes_insert = TokenStream::new();
     let mut upgradable = false;
+    let mut router_types: HashSet<&str> = HashSet::new();
 
     if routes.is_empty() {
         // if no routes, provide a basic index displaying canister stats
@@ -73,6 +97,8 @@ pub fn gen_http_request_code() -> TokenStream {
 
             router.insert("GET", "/*p", (index, false));
         };
+
+        router_types.insert("get");
     } else {
         for Handler {
             method,
@@ -90,6 +116,8 @@ pub fn gen_http_request_code() -> TokenStream {
             routes_insert.extend(quote! {
                 router.insert(#method, #route, (#name, #upgrade));
             });
+
+            router_types.insert(method.as_str());
         }
     }
 
@@ -154,30 +182,35 @@ pub fn gen_http_request_code() -> TokenStream {
         });
     };
 
+    let mut router_fields = TokenStream::new();
+    let mut router_default = TokenStream::new();
+    let mut router_insert = TokenStream::new();
+    let mut router_ats = TokenStream::new();
+
+    for method in router_types {
+        let method = method;
+        let ident = syn::Ident::new(&method.to_lowercase(), proc_macro2::Span::call_site());
+        router_fields.extend(quote!(#ident: ic_kit::http::BasicRouter<HandlerFn>,));
+
+        router_default.extend(quote!(#ident: ic_kit::http::BasicRouter::new(),));
+
+        router_insert.extend(quote!(#method => self.#ident.insert(path, handler).unwrap(),));
+
+        router_ats.extend(quote!(#method => self.#ident.at(path),));
+    }
+
     quote! {
         pub type HandlerFn = (fn(ic_kit::http::HttpRequest, ic_kit::http::Params) -> ic_kit::http::HttpResponse, bool);
 
         #[derive(Clone)]
         pub struct Router {
-            get: ic_kit::http::BasicRouter<HandlerFn>,
-            post: ic_kit::http::BasicRouter<HandlerFn>,
-            put: ic_kit::http::BasicRouter<HandlerFn>,
-            delete: ic_kit::http::BasicRouter<HandlerFn>,
-            patch: ic_kit::http::BasicRouter<HandlerFn>,
-            head: ic_kit::http::BasicRouter<HandlerFn>,
-            options: ic_kit::http::BasicRouter<HandlerFn>,
+            #router_fields
         }
 
         impl Default for Router {
             fn default() -> Self {
                 let mut router = Self {
-                    get: ic_kit::http::BasicRouter::new(),
-                    post: ic_kit::http::BasicRouter::new(),
-                    put: ic_kit::http::BasicRouter::new(),
-                    delete: ic_kit::http::BasicRouter::new(),
-                    patch: ic_kit::http::BasicRouter::new(),
-                    head: ic_kit::http::BasicRouter::new(),
-                    options: ic_kit::http::BasicRouter::new(),
+                    #router_default
                 };
                 #routes_insert
                 router
@@ -187,13 +220,7 @@ pub fn gen_http_request_code() -> TokenStream {
         impl Router {
             pub fn insert(&mut self, method: &str, path: &str, handler: HandlerFn) {
                 match method {
-                    "GET" => self.get.insert(path, handler).unwrap(),
-                    "POST" => self.post.insert(path, handler).unwrap(),
-                    "PUT" => self.put.insert(path, handler).unwrap(),
-                    "DELETE" => self.delete.insert(path, handler).unwrap(),
-                    "PATCH" => self.patch.insert(path, handler).unwrap(),
-                    "HEAD" => self.head.insert(path, handler).unwrap(),
-                    "OPTIONS" => self.options.insert(path, handler).unwrap(),
+                    #router_insert
                     _ => panic!("unsupported method: {}", method),
                 };
             }
@@ -204,13 +231,7 @@ pub fn gen_http_request_code() -> TokenStream {
                 path: &'p str,
             ) -> Result<Match<'s, 'p, &HandlerFn>, MatchError> {
                 match method {
-                    "GET" => self.get.at(path),
-                    "POST" => self.post.at(path),
-                    "PUT" => self.put.at(path),
-                    "DELETE" => self.delete.at(path),
-                    "PATCH" => self.patch.at(path),
-                    "HEAD" => self.head.at(path),
-                    "OPTIONS" => self.options.at(path),
+                    #router_ats
                     _ => Err(MatchError::NotFound),
                 }
             }

@@ -21,6 +21,7 @@ struct Method {
 lazy_static! {
     static ref METHODS: Mutex<BTreeMap<String, Method>> = Mutex::new(Default::default());
     static ref LIFE_CYCLES: Mutex<BTreeMap<EntryPoint, Method>> = Mutex::new(Default::default());
+    
 }
 
 pub(crate) fn declare(

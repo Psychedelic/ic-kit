@@ -2,13 +2,16 @@
 //!
 //! [1]: <https://internetcomputer.org/docs/current/references/ic-interface-spec/#entry-points>
 
-use crate::export_service::declare;
+use std::fmt::Formatter;
+
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::quote;
 use serde::Deserialize;
 use serde_tokenstream::from_tokenstream;
-use std::fmt::Formatter;
 use syn::{spanned::Spanned, Error};
+
+use crate::di::{collect_args, di};
+use crate::export_service::declare;
 
 #[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq)]
 pub enum EntryPoint {
@@ -170,7 +173,10 @@ pub fn gen_entry_point_code(
     };
 
     // Build the outer function's body.
-    let tmp = di(collect_args(entry_point, signature)?, is_async)?;
+    let tmp = di(
+        collect_args(entry_point.to_string().as_str(), signature)?,
+        is_async,
+    )?;
     let args = tmp.args;
     let (can_args, can_types): (Vec<_>, Vec<_>) = tmp.can_args.into_iter().unzip();
     let (imu_args, imu_types): (Vec<_>, Vec<_>) = tmp.imu_args.into_iter().unzip();
@@ -178,7 +184,7 @@ pub fn gen_entry_point_code(
 
     // If the method does not accept any arguments, don't even read the msg_data, and if the
     // deserialization fails, just reject the message, which is cheaper than trap.
-    let arg_decode = if can_args.len() == 0 {
+    let arg_decode = if can_args.is_empty() {
         quote! {}
     } else {
         quote! {
@@ -323,89 +329,4 @@ pub fn gen_entry_point_code(
         #[inline(always)]
         #item
     })
-}
-
-#[derive(Default)]
-struct ProcessedArgs {
-    args: Vec<Ident>,
-    mut_args: Vec<(Ident, syn::Type)>,
-    imu_args: Vec<(Ident, syn::Type)>,
-    can_args: Vec<(Ident, syn::Type)>,
-    injected: Vec<syn::Type>,
-}
-
-fn di(args: Vec<(Ident, syn::Type)>, is_async: bool) -> Result<ProcessedArgs, Error> {
-    let mut result = ProcessedArgs::default();
-
-    for (ident, ty) in args {
-        result.args.push(ident.clone());
-
-        match ty {
-            syn::Type::Reference(ty_ref) if is_async => {
-                return Err(Error::new(
-                    ty_ref.span(),
-                    format!("IC-Kit's dependency injection can only work on sync methods."),
-                ));
-            }
-            syn::Type::Reference(ty_ref) if !result.can_args.is_empty() => {
-                return Err(Error::new(
-                    ty_ref.span(),
-                    format!("An IC-kit dependency injected reference could only come before canister arguments."),
-                ));
-            }
-            syn::Type::Reference(ty_ref) if result.injected.contains(&ty_ref.elem) => {
-                return Err(Error::new(
-                    ty_ref.span(),
-                    format!(
-                        "IC-Kit's dependency injection can only inject one instance of each type."
-                    ),
-                ));
-            }
-            syn::Type::Reference(ty_ref) if ty_ref.mutability.is_some() => {
-                result.mut_args.push((ident, *ty_ref.elem.clone()));
-                result.injected.push(*ty_ref.elem);
-            }
-            syn::Type::Reference(ty_ref) => {
-                result.imu_args.push((ident, *ty_ref.elem.clone()));
-                result.injected.push(*ty_ref.elem);
-            }
-            ty => {
-                result.can_args.push((ident, ty));
-            }
-        }
-    }
-
-    Ok(result)
-}
-
-fn collect_args(
-    entry_point: EntryPoint,
-    signature: &syn::Signature,
-) -> Result<Vec<(Ident, syn::Type)>, Error> {
-    let mut args = Vec::new();
-
-    for (id, arg) in signature.inputs.iter().enumerate() {
-        let (ident, ty) = match arg {
-            syn::FnArg::Receiver(r) => {
-                return Err(Error::new(
-                    r.span(),
-                    format!(
-                        "#[{}] macro can not be used on a function with `self` as a parameter.",
-                        entry_point
-                    ),
-                ))
-            }
-            syn::FnArg::Typed(syn::PatType { pat, ty, .. }) => {
-                if let syn::Pat::Ident(syn::PatIdent { ident, .. }) = pat.as_ref() {
-                    (ident.clone(), *ty.clone())
-                } else {
-                    (Ident::new(&format!("arg_{}", id), pat.span()), *ty.clone())
-                }
-            }
-        };
-
-        args.push((ident, ty));
-    }
-
-    Ok(args)
 }

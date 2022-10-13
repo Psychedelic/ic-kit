@@ -11,6 +11,7 @@ mod export_service;
 #[cfg(feature = "http")]
 mod http;
 
+mod di;
 mod metadata;
 mod test;
 
