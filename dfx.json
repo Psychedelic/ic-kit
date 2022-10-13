@@ -2,6 +2,11 @@
   "version": 1,
   "dfx": "0.11.1",
   "canisters": {
+    "hello": {
+      "candid": "examples/hello/candid.did",
+      "package": "ic_kit_example_hello",
+      "type": "rust"
+    },
     "counter": {
       "candid": "examples/counter/candid.did",
       "package": "ic_kit_example_counter",
