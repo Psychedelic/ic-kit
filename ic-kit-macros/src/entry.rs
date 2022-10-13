@@ -10,7 +10,7 @@ use serde::Deserialize;
 use serde_tokenstream::from_tokenstream;
 use syn::{spanned::Spanned, Error};
 
-use crate::di::{collect_args, di};
+use crate::di::{collect_args, di, wrap};
 use crate::export_service::declare;
 
 #[derive(Copy, Clone, PartialOrd, PartialEq, Ord, Eq)]
@@ -40,17 +40,11 @@ impl std::fmt::Display for EntryPoint {
 
 impl EntryPoint {
     pub fn is_lifecycle(&self) -> bool {
-        match &self {
-            EntryPoint::Update | EntryPoint::Query => false,
-            _ => true,
-        }
+        !matches!(self, EntryPoint::Update | EntryPoint::Query)
     }
 
     pub fn is_inspect_message(&self) -> bool {
-        match &self {
-            EntryPoint::InspectMessage => true,
-            _ => false,
-        }
+        matches!(self, EntryPoint::InspectMessage)
     }
 }
 
@@ -173,14 +167,12 @@ pub fn gen_entry_point_code(
     };
 
     // Build the outer function's body.
-    let tmp = di(
+    let p_args = di(
         collect_args(entry_point.to_string().as_str(), signature)?,
         is_async,
     )?;
-    let args = tmp.args;
-    let (can_args, can_types): (Vec<_>, Vec<_>) = tmp.can_args.into_iter().unzip();
-    let (imu_args, imu_types): (Vec<_>, Vec<_>) = tmp.imu_args.into_iter().unzip();
-    let (mut_args, mut_types): (Vec<_>, Vec<_>) = tmp.mut_args.into_iter().unzip();
+    let args = p_args.args.clone();
+    let (can_args, can_types): (Vec<_>, Vec<_>) = p_args.can_args.clone().into_iter().unzip();
 
     // If the method does not accept any arguments, don't even read the msg_data, and if the
     // deserialization fails, just reject the message, which is cheaper than trap.
@@ -229,39 +221,14 @@ pub fn gen_entry_point_code(
         }
     };
 
-    // Because DI doesn't work on an async method.
-    let mut sync_result = quote! {
-        let result = #name ( #(#args),* );
-        #return_encode
-    };
-
-    sync_result = match imu_args.len() {
-        0 => sync_result,
-        1 => quote! {
-            ic_kit::ic::with(|#(#imu_args: &#imu_types),*| {
-                #sync_result
-            });
+    // DI doesn't work on async methods.
+    let sync_result = wrap(
+        quote! {
+            let result = #name ( #(#args),* );
+            #return_encode
         },
-        _ => quote! {
-            ic_kit::ic::with_many(|(#(#imu_args),*) : (#(&#imu_types),*)| {
-                #sync_result
-            });
-        },
-    };
-
-    sync_result = match mut_args.len() {
-        0 => sync_result,
-        1 => quote! {
-            ic_kit::ic::with_mut(|#(#mut_args: &mut #mut_types),*| {
-                #sync_result
-            });
-        },
-        _ => quote! {
-            ic_kit::ic::with_many_mut(|(#(#mut_args),*) : (#(&mut #mut_types),*)| {
-                #sync_result
-            });
-        },
-    };
+        p_args,
+    );
 
     // only spawn for async methods.
     let body = if is_async {
@@ -309,9 +276,7 @@ pub fn gen_entry_point_code(
         #[doc(hidden)]
         #[export_name = #export_name]
         fn #outer_function_ident() {
-            #[cfg(target_family = "wasm")]
             ic_kit::setup_hooks();
-
             #guard
             #body
         }
@@ -319,9 +284,6 @@ pub fn gen_entry_point_code(
         #[cfg(not(target_family = "wasm"))]
         #[doc(hidden)]
         fn #outer_function_ident() {
-            #[cfg(target_family = "wasm")]
-            ic_kit::setup_hooks();
-
             #guard
             #body
         }

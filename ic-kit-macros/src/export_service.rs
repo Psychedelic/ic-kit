@@ -21,7 +21,6 @@ struct Method {
 lazy_static! {
     static ref METHODS: Mutex<BTreeMap<String, Method>> = Mutex::new(Default::default());
     static ref LIFE_CYCLES: Mutex<BTreeMap<EntryPoint, Method>> = Mutex::new(Default::default());
-    
 }
 
 pub(crate) fn declare(
@@ -91,12 +90,12 @@ pub(crate) fn declare(
 pub fn export_service(input: DeriveInput, save_candid_path: Option<syn::LitStr>) -> TokenStream {
     let methods = {
         let mut map = METHODS.lock().unwrap();
-        std::mem::replace(&mut *map, BTreeMap::new())
+        std::mem::take(&mut *map)
     };
 
     let mut life_cycles = {
         let mut map = LIFE_CYCLES.lock().unwrap();
-        std::mem::replace(&mut *map, BTreeMap::new())
+        std::mem::take(&mut *map)
     };
 
     let mut rust_methods = Vec::new();
@@ -230,7 +229,7 @@ pub fn export_service(input: DeriveInput, save_candid_path: Option<syn::LitStr>)
         #[cfg(feature = "http")]
         () => crate::http::gen_http_request_code(),
     };
-    
+
     let metadata = generate_metadata();
 
     quote! {
