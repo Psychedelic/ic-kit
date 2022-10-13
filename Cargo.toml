@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "examples/hello",
     "examples/counter",
     "examples/factory_counter",
     "examples/fib",

@@ -1,6 +1,6 @@
 [package]
 name = "ic-kit-stable"
-version = "0.1.0-alpha.0"
+version = "0.1.0-alpha.1"
 edition = "2021"
 authors = ["Parsa Ghadimi <i@parsa.ooo>", "Ossian Mapes <oz@fleek.co>"]
 description = "IC-Kit's data structures living on the stable storage."

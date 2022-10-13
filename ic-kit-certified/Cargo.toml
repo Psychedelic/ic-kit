@@ -1,6 +1,6 @@
 [package]
 name = "ic-kit-certified"
-version = "0.1.0-alpha.0"
+version = "0.1.0-alpha.1"
 edition = "2018"
 description = "Certified variable friendly data structures for the Internet Computer."
 authors = ["Parsa Ghadimi <i@parsa.ooo>", "Ossian Mapes <oz@fleek.co>"]

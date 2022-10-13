@@ -1,6 +1,6 @@
 [package]
 name = "ic-kit-http"
-version = "0.1.0-alpha.0"
+version = "0.1.0-alpha.2"
 edition = "2021"
 authors = ["Ossian Mapes <oz@fleek.co>", "Parsa Ghadimi <i@parsa.ooo>"]
 description = "IC-Kit's macros for canister development"
@@ -16,7 +16,7 @@ include = ["src", "Cargo.toml", "README.md"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ic-kit-macros = { path = "../ic-kit-macros", features = ["http"] }
+ic-kit-macros = { path = "../ic-kit-macros", features = ["http"], version = "0.2.0-alpha.0" }
 candid = "0.8"
 serde = "1.0"
 matchit = "0.6.0"

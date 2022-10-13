@@ -1,6 +1,6 @@
 [package]
 name = "ic-kit-runtime"
-version = "0.1.0-alpha.2"
+version = "0.1.0-alpha.3"
 edition = "2021"
 authors = ["Parsa Ghadimi <i@parsa.ooo>", "Ossian Mapes <oz@fleek.co>"]
 description = "IC-Kit's Canister Simulator"
