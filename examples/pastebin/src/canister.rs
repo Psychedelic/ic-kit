@@ -89,25 +89,23 @@ fn index_handler(r: HttpRequest, _: Params) -> HttpResponse {
 
 /// Get paste handler
 #[get(route = "/:file")]
-fn get_file(_: HttpRequest, p: Params) -> HttpResponse {
+fn get_file_handler(data: &Data, _: HttpRequest, p: Params) -> HttpResponse {
     let file = p.get("file").unwrap();
-    with(|data: &Data| match data.get(file) {
+    match data.get(file) {
         Some(content) => HttpResponse::ok().with_body(content.clone()),
         None => HttpResponse::new(404).with_body(format!("file not found `{}`\n", file)),
-    })
+    }
 }
 
 /// Upload paste handler
 #[put(route = "/:file", upgrade = true)]
-fn put_file(req: HttpRequest, p: Params) -> HttpResponse {
+fn put_file_handler(data: &mut Data, req: HttpRequest, p: Params) -> HttpResponse {
     let filename = p.get("file").unwrap();
-    let url = req.header("host").unwrap_or("unknown");
+    let host = req.header("host").unwrap_or("unknown");
 
-    let res = format!("{}.{}/{}", id().to_text(), "localhost:8000", filename);
+    let res = format!("{}/{}", host, filename);
 
-    with_mut(|d: &mut Data| {
-        d.insert(filename.to_string(), req.body);
-    });
+    data.insert(filename.to_string(), req.body);
 
     HttpResponse::ok().with_body(res)
 }

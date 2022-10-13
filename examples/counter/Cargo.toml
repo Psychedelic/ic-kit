@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 # With the `http` feature enabled, and no configured routes, the canister will provide status info at the index path.
-ic-kit = {path="../../ic-kit", features = ["http"]}
+ic-kit = { path = "../../ic-kit" }
 
 
 [[bin]]
