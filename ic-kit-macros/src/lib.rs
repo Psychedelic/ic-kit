@@ -226,8 +226,8 @@ pub fn delete(attr: TokenStream, item: TokenStream) -> TokenStream {
         .into()
 }
 
-/// Export a function as a HTTP PATCH handler.
-#[cfg(feature = "http")]
+/// Export a function as a HTTP PATCH handler. Enabled with the `experimental-http` feature.
+#[cfg(feature = "experimental-http")]
 #[proc_macro_attribute]
 pub fn patch(attr: TokenStream, item: TokenStream) -> TokenStream {
     http::gen_handler_code("PATCH", attr.into(), item.into())
@@ -235,8 +235,8 @@ pub fn patch(attr: TokenStream, item: TokenStream) -> TokenStream {
         .into()
 }
 
-/// Export a function as a HTTP OPTIONS handler.
-#[cfg(feature = "http")]
+/// Export a function as a HTTP OPTIONS handler. Enabled with the `experimental-http` feature.
+#[cfg(feature = "experimental-http")]
 #[proc_macro_attribute]
 pub fn options(attr: TokenStream, item: TokenStream) -> TokenStream {
     http::gen_handler_code("OPTIONS", attr.into(), item.into())
@@ -244,8 +244,8 @@ pub fn options(attr: TokenStream, item: TokenStream) -> TokenStream {
         .into()
 }
 
-/// Export a function as a HTTP HEAD handler.
-#[cfg(feature = "http")]
+/// Export a function as a HTTP HEAD handler. Enabled with the `experimental-http` feature.
+#[cfg(feature = "experimental-http")]
 #[proc_macro_attribute]
 pub fn head(attr: TokenStream, item: TokenStream) -> TokenStream {
     http::gen_handler_code("HEAD", attr.into(), item.into())

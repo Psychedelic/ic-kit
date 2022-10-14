@@ -27,6 +27,7 @@ compile-time-run = "0.2.12"
 [features]
 default = []
 http = []
+experimental-http = []
 
 [lib]
 proc-macro = true
