@@ -148,7 +148,7 @@ pub fn gen_entry_point_code(
         Span::call_site(),
     );
 
-    let export_function_dent = Ident::new(
+    let export_function_ident = Ident::new(
         &format!("_ic_kit_exported_canister_{}_{}", entry_point, name),
         Span::call_site(),
     );
@@ -314,10 +314,10 @@ pub fn gen_entry_point_code(
             #body
         }
 
-        #[cfg(feature="kit-wasm-export")]
+        #[cfg(not(feature="kit-lib"))]
         #[export_name = #export_name]
         #[doc(hidden)]
-        fn #export_function_dent() {
+        fn #export_function_ident() {
             #outer_function_ident();
         }
 

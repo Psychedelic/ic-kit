@@ -356,8 +356,6 @@ impl ReplicaState {
 
     /// Install the given canister.
     pub fn install_code(&mut self, canister: Canister) {
-        println!("Installing code for canister {}", canister.id());
-
         let canister_id = canister.id();
 
         if self.canisters.contains_key(&canister_id) {

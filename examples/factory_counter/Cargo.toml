@@ -7,10 +7,10 @@ edition = "2021"
 
 [dependencies]
 ic-kit = {path="../../ic-kit"}
-ic_kit_example_counter = {path="../counter"}
+ic_kit_example_counter = {path="../counter", features=["kit-lib"]}
 
 [features]
-kit-wasm-export = []
+kit-lib = []
 
 [lib]
 crate-type = ["cdylib", "lib"]

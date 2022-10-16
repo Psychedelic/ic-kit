@@ -35,6 +35,9 @@ pub struct MultiCounterCanister;
 mod tests {
     use super::*;
 
+    #[test]
+    fn x() {}
+
     #[kit_test]
     async fn test_multi_canister(replica: Replica) {
         let counter1_id = Principal::from_text("whq4n-xiaaa-aaaam-qaazq-cai").unwrap();
