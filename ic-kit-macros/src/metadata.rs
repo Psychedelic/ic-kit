@@ -22,7 +22,7 @@ pub fn generate_metadata() -> TokenStream {
 
     let cdk = generate_static_string(
         "CDK_VERSION",
-        run_command_str!("cargo", "tree", "-i", "ic-kit", "-e", "build"),
+        run_command_str!("cargo", "tree", "-i", "ic-kit"),
     );
 
     let compiler = generate_static_string(
