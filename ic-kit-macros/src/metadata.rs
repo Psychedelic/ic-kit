@@ -20,10 +20,7 @@ pub fn generate_metadata() -> TokenStream {
         run_command_str!("git", "config", "--get", "remote.origin.url"),
     );
 
-    let cdk = generate_static_string(
-        "CDK_VERSION",
-        run_command_str!("cargo", "tree", "-i", "ic-kit"),
-    );
+    let cdk = generate_static_string("CDK_VERSION", "0.5.0-alpha");
 
     let compiler = generate_static_string(
         "COMPILER",
