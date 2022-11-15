@@ -1,11 +1,12 @@
 [workspace]
 members = [
-    "e2e",
+    "examples/hello",
     "examples/counter",
     "examples/factory_counter",
     "examples/fib",
     "examples/multi_counter",
     "examples/naming_system",
+    "examples/pastebin",
     "ic-kit",
     "ic-kit-certified",
     "ic-kit-macros",
@@ -13,6 +14,7 @@ members = [
     "ic-kit-runtime",
     "ic-kit-stable",
     "ic-kit-sys",
+    "ic-kit-http",
 ]
 
 [profile.canister-release]

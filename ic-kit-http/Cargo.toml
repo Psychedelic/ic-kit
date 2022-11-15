@@ -1,13 +1,13 @@
 [package]
-name = "ic-kit-macros"
-version = "0.2.0-alpha.0"
+name = "ic-kit-http"
+version = "0.1.0-alpha.2"
 edition = "2021"
-authors = ["Parsa Ghadimi <i@parsa.ooo>", "Ossian Mapes <oz@fleek.co>"]
+authors = ["Ossian Mapes <oz@fleek.co>", "Parsa Ghadimi <i@parsa.ooo>"]
 description = "IC-Kit's macros for canister development"
 license = "MIT"
 readme = "README.md"
 repository = "https://github.com/Psychedelic/ic-kit"
-documentation = "https://docs.rs/ic-kit-macros"
+documentation = "https://docs.rs/ic-kit-http"
 homepage = "https://sly.ooo"
 categories = ["api-bindings"]
 keywords = ["internet-computer", "canister", "fleek", "psychedelic"]
@@ -16,18 +16,8 @@ include = ["src", "Cargo.toml", "README.md"]
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-quote = "1.0"
-proc-macro2 = "1.0"
-syn = "1.0"
+ic-kit-macros = { path = "../ic-kit-macros", features = ["http"], version = "0.2.0-alpha.0" }
+candid = "0.8"
 serde = "1.0"
-serde_tokenstream = "0.1"
+matchit = "0.6.0"
 lazy_static = "1.4"
-compile-time-run = "0.2.12"
-
-[features]
-default = []
-http = []
-experimental-http = []
-
-[lib]
-proc-macro = true

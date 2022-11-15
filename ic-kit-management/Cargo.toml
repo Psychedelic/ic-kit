@@ -6,6 +6,6 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ic-kit = {path="../ic-kit", version="0.5.0-alpha.4"}
-candid="0.7"
-serde="1.0"
+ic-kit = { path = "../ic-kit", version = "0.5.0-alpha.5" }
+candid = "0.8"
+serde = "1.0"

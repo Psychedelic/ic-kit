@@ -1,0 +1,15 @@
+[package]
+name = "ic_kit_example_pastebin"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+ic-kit = {path="../../ic-kit", features = ["http"]}
+tinytemplate = "1.1"
+serde = { version = "1.0", features = ["derive"] }
+
+[[bin]]
+name = "ic_kit_example_pastebin"
+path = "src/main.rs"

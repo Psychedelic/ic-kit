@@ -15,7 +15,6 @@
 
 use std::collections::HashMap;
 use std::future::Future;
-use std::panic::{RefUnwindSafe, UnwindSafe};
 
 use candid::Principal;
 use tokio::sync::{mpsc, oneshot};
@@ -181,9 +180,9 @@ async fn replica_worker(mut rx: mpsc::UnboundedReceiver<ReplicaMessage>) {
 /// Start a dedicated event loop for a canister, this will get CanisterMessage messages from a tokio
 /// channel and perform
 async fn canister_worker(
-    mut rx: mpsc::UnboundedReceiver<ReplicaCanisterRequest>,
-    mut replica: mpsc::UnboundedSender<ReplicaMessage>,
-    mut canister: Canister,
+    rx: mpsc::UnboundedReceiver<ReplicaCanisterRequest>,
+    replica: mpsc::UnboundedSender<ReplicaMessage>,
+    canister: Canister,
 ) {
     let canister_id = canister.id();
 
